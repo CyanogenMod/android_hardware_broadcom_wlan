@@ -661,6 +661,10 @@ si_setcore(si_t *sih, uint coreid, uint coreunit)
 {
 	uint idx;
 
+	if (!sih) {
+		printk("%s: Null, %u, %u\n", __func__, coreid, coreunit);
+		return NULL;
+	}
 	idx = si_findcoreidx(sih, coreid, coreunit);
 	if (!GOODIDX(idx))
 		return (NULL);

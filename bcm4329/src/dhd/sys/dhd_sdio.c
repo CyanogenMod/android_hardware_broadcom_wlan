@@ -60,6 +60,8 @@
 #include <dhdioctl.h>
 #include <sdiovar.h>
 
+#include <linux/gpio.h>
+
 #define QLEN		256	/* bulk rx and tx queue lengths */
 #define FCHI		(QLEN - 10)
 #define FCLOW		(FCHI / 2)
@@ -714,8 +716,16 @@ dhdsdio_clkctl(dhd_bus_t *bus, uint target, bool pendok)
 	return BCME_OK;
 }
 
-static int
-dhdsdio_bussleep(dhd_bus_t *bus, bool sleep)
+int dhdsdio_oob(dhd_bus_t *bus)
+{
+	sdpcmd_regs_t *regs = bus->regs;
+	uint retries = 0;
+
+	W_SDREG(SMB_USE_OOB, &regs->tosbmailbox, retries);
+	return 0;
+}
+
+int dhdsdio_bussleep(dhd_bus_t *bus, bool sleep)
 {
 	bcmsdh_info_t *sdh = bus->sdh;
 	sdpcmd_regs_t *regs = bus->regs;
@@ -735,7 +745,6 @@ dhdsdio_bussleep(dhd_bus_t *bus, bool sleep)
 		if (bus->dpc_sched || bus->rxskip || pktq_len(&bus->txq))
 			return BCME_BUSY;
 
-
 		/* Disable SDIO interrupts (no longer interested) */
 		bcmsdh_intr_disable(bus->sdh);
 
@@ -754,34 +763,33 @@ dhdsdio_bussleep(dhd_bus_t *bus, bool sleep)
 		                 SBSDIO_FORCE_HW_CLKREQ_OFF, NULL);
 
 		/* Isolate the bus */
+#if 0
 		bcmsdh_cfg_write(sdh, SDIO_FUNC_1, SBSDIO_DEVICE_CTL,
 		                 SBSDIO_DEVCTL_PADS_ISO, NULL);
-
+#endif
 		/* Change state */
 		bus->sleeping = TRUE;
 
 	} else {
 		/* Waking up: bus power up is ok, set local state */
-
 		bcmsdh_cfg_write(sdh, SDIO_FUNC_1, SBSDIO_FUNC1_CHIPCLKCSR,
 		                 0, NULL);
-
 		/* Force pad isolation off if possible (in case power never toggled) */
 		if ((bus->sih->buscoretype == PCMCIA_CORE_ID) && (bus->sih->buscorerev >= 10))
 			bcmsdh_cfg_write(sdh, SDIO_FUNC_1, SBSDIO_DEVICE_CTL, 0, NULL);
 
-
-		/* Make sure we have SD bus access */
-		if (bus->clkstate == CLK_NONE)
-			dhdsdio_clkctl(bus, CLK_SDONLY, FALSE);
+		/* Make sure the controller has the bus up */
+		dhdsdio_clkctl(bus, CLK_AVAIL, FALSE);
 
 		/* Send misc interrupt to indicate OOB not needed */
 		W_SDREG(0, &regs->tosbmailboxdata, retries);
 		if (retries <= retry_limit)
 			W_SDREG(SMB_DEV_INT, &regs->tosbmailbox, retries);
-
-		if (retries > retry_limit)
+		else
 			DHD_ERROR(("CANNOT SIGNAL CHIP TO CLEAR OOB!!\n"));
+
+		/* Make sure we have SD bus access */
+		dhdsdio_clkctl(bus, CLK_SDONLY, FALSE);
 
 		/* Change state */
 		bus->sleeping = FALSE;
@@ -792,7 +800,6 @@ dhdsdio_bussleep(dhd_bus_t *bus, bool sleep)
 			bcmsdh_intr_enable(bus->sdh);
 		}
 	}
-
 	return BCME_OK;
 }
 
@@ -3894,7 +3901,7 @@ clkwait:
 		bus->activity = FALSE;
 		dhdsdio_clkctl(bus, CLK_NONE, FALSE);
 	}
-
+	dhd_os_wake_lock_timeout(bus->dhd); /* Keep wake lock for rx */
 	return resched;
 }
 
@@ -3920,7 +3927,6 @@ dhdsdio_isr(void *arg)
 	dhd_bus_t *bus = (dhd_bus_t*)arg;
 	bcmsdh_info_t *sdh = bus->sdh;
 
-
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
 
 	/* Count the interrupt call */
@@ -3944,12 +3950,13 @@ dhdsdio_isr(void *arg)
 	bus->intdis = TRUE;
 
 #if defined(SDIO_ISR_THREAD)
+	dhd_os_wake_lock(bus->dhd);
 	while (dhdsdio_dpc(bus));
+	dhd_os_wake_unlock(bus->dhd);
 #else
 	bus->dpc_sched = TRUE;
 	dhd_sched_dpc(bus->dhd);
 #endif 
-
 }
 
 #ifdef SDTEST
@@ -4319,6 +4326,8 @@ dhdsdio_chipmatch(uint16 chipid)
 	return FALSE;
 }
 
+int dhd_customer_wifi_complete(void *);
+
 static void *
 dhdsdio_probe(uint16 venid, uint16 devid, uint16 bus_no, uint16 slot,
 	uint16 func, uint bustype, void *regsva, osl_t * osh, void *sdh)
@@ -4471,9 +4480,11 @@ dhdsdio_probe(uint16 venid, uint16 devid, uint16 bus_no, uint16 slot,
 		DHD_ERROR(("%s: Net attach failed!!\n", __FUNCTION__));
 		goto fail;
 	}
-
+	if (dhd_customer_wifi_complete(bus->dhd)) {
+		DHD_ERROR(("%s: Platform resorce!!\n", __FUNCTION__));
+		goto fail;
+	}
 	return bus;
-
 fail:
 	dhdsdio_release(bus, osh);
 	return NULL;
@@ -4748,7 +4759,6 @@ dhd_bus_download_firmware(struct dhd_bus *bus, osl_t *osh,
 
 	ret = dhdsdio_download_firmware(bus, osh, bus->sdh);
 
-
 	return ret;
 }
 
@@ -4759,12 +4769,12 @@ dhdsdio_download_firmware(struct dhd_bus *bus, osl_t *osh, void *sdh)
 
 	/* Download the firmware */
 	dhdsdio_clkctl(bus, CLK_AVAIL, FALSE);
-
-	ret = _dhdsdio_download_firmware(bus) == 0;
-
+	dhd_os_wake_lock(bus->dhd);
+	ret = _dhdsdio_download_firmware(bus);
+	dhd_os_wake_unlock(bus->dhd);
 	dhdsdio_clkctl(bus, CLK_SDONLY, FALSE);
 
-	return ret;
+	return !ret;
 }
 
 /* Detach and free everything */

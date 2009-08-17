@@ -55,6 +55,10 @@
 #include <dhd_proto.h>
 #include <dhd_dbg.h>
 
+#ifdef CONFIG_HAS_WAKELOCK
+#include <linux/wakelock.h>
+#endif
+#include <linux/freezer.h>
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 0))
 MODULE_LICENSE("GPL v2");
@@ -116,6 +120,17 @@ typedef struct dhd_info {
 	struct semaphore dpc_sem;
 	struct completion dpc_exited;
 
+	/* Wakelocks */
+#ifdef CONFIG_HAS_WAKELOCK
+	struct wake_lock wl_wifi;   /* Wifi wakelock */
+	struct wake_lock wl_rxwake; /* Wifi rx wakelock */
+#endif
+	spinlock_t wl_lock;
+	int wl_count;
+	int wl_packet;
+	unsigned int oob_irq;
+	int oob_irq_flag;
+
 	/* Thread to issue ioctl for multicast */
 	long sysioc_pid;
 	struct semaphore sysioc_sem;
@@ -144,7 +159,7 @@ uint dhd_sysioc = TRUE;
 module_param(dhd_sysioc, uint, 0);
 
 /* Watchdog interval */
-uint dhd_watchdog_ms = 10;
+uint dhd_watchdog_ms = 1000;
 module_param(dhd_watchdog_ms, uint, 0);
 
 
@@ -748,6 +763,7 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt)
 	int i;
 	dhd_if_t *ifp;
 	wl_event_msg_t event;
+	unsigned long flags;
 
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
 
@@ -830,6 +846,9 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt)
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 0) */
 		}
 	}
+	spin_lock_irqsave(&dhd->wl_lock, flags);
+	dhd->wl_packet = 1;
+	spin_unlock_irqrestore(&dhd->wl_lock, flags);
 }
 
 void
@@ -898,6 +917,8 @@ dhd_watchdog_thread(void *data)
 	}
 #endif /* DHD_SCHED */
 
+	set_freezable();
+
 	DAEMONIZE("dhd_watchdog");
 
 	/* Run until signal received */
@@ -959,6 +980,8 @@ dhd_dpc_thread(void *data)
 	}
 #endif /* DHD_SCHED */
 
+	set_freezable();
+
 	DAEMONIZE("dhd_dpc");
 
 	/* Run until signal received */
@@ -968,8 +991,11 @@ dhd_dpc_thread(void *data)
 			if (dhd->pub.busstate != DHD_BUS_DOWN) {
 				if (dhd_bus_dpc(dhd->pub.bus))
 					up(&dhd->dpc_sem);
+				else
+					dhd_os_wake_unlock(&dhd->pub);
 			} else {
 				dhd_bus_stop(dhd->pub.bus, TRUE);
+				dhd_os_wake_unlock(&dhd->pub);
 			}
 		}
 		else
@@ -1000,6 +1026,7 @@ dhd_sched_dpc(dhd_pub_t *dhdp)
 {
 	dhd_info_t *dhd = (dhd_info_t *)dhdp->info;
 
+	dhd_os_wake_lock(dhdp);
 	if (dhd->dpc_pid >= 0) {
 		up(&dhd->dpc_sem);
 		return;
@@ -1480,6 +1507,15 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen)
 	spin_lock_init(&dhd->sdlock);
 	spin_lock_init(&dhd->txqlock);
 
+	/* Initialize Wakelock stuff */
+	spin_lock_init(&dhd->wl_lock);
+	dhd->wl_count = 0;
+	dhd->wl_packet = 0;
+#ifdef CONFIG_HAS_WAKELOCK
+	wake_lock_init(&dhd->wl_wifi, WAKE_LOCK_SUSPEND, "wlan_wake");
+	wake_lock_init(&dhd->wl_rxwake, WAKE_LOCK_SUSPEND, "wlan_rx_wake");
+#endif
+
 	/* Link to info module */
 	dhd->pub.info = dhd;
 
@@ -1763,10 +1799,17 @@ dhd_detach(dhd_pub_t *dhdp)
 #endif
 
 		free_netdev(ifp->net);
+#ifdef CONFIG_HAS_WAKELOCK
+		wake_lock_destroy(&dhd->wl_wifi);
+		wake_lock_destroy(&dhd->wl_rxwake);
+#endif
 		MFREE(dhd->pub.osh, ifp, sizeof(*ifp));
 		MFREE(dhd->pub.osh, dhd, sizeof(*dhd));
 	}
 }
+
+int dhd_customer_wifi_add_dev(void);
+void dhd_customer_wifi_del_dev(void);
 
 static int __init
 dhd_module_init(void)
@@ -1790,10 +1833,16 @@ dhd_module_init(void)
 	} while (0);
 
 	error = dhd_bus_register();
+	if (error)
+		return error;
 
-	if (!error)
+	error = dhd_customer_wifi_add_dev();
+	if (error) {
+		printk(KERN_ERR "%s: Fail to add wifi device\n", __func__);
+		dhd_bus_unregister();
+        }
+	else
 		printf("\n%s\n", dhd_version);
-
 	return error;
 }
 
@@ -1801,10 +1850,9 @@ static void __exit
 dhd_module_cleanup(void)
 {
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
-
 	dhd_bus_unregister();
+	dhd_customer_wifi_del_dev();
 }
-
 
 module_init(dhd_module_init);
 module_exit(dhd_module_cleanup);
@@ -1959,7 +2007,7 @@ dhd_os_sdlock(dhd_pub_t *pub)
 	if (dhd->threads_only)
 		down(&dhd->sdsem);
 	else
-	spin_lock_bh(&dhd->sdlock);
+		spin_lock_bh(&dhd->sdlock);
 }
 
 void
@@ -1972,7 +2020,7 @@ dhd_os_sdunlock(dhd_pub_t *pub)
 	if (dhd->threads_only)
 		up(&dhd->sdsem);
 	else
-	spin_unlock_bh(&dhd->sdlock);
+		spin_unlock_bh(&dhd->sdlock);
 }
 
 void
@@ -2098,4 +2146,92 @@ dhd_dev_init_ioctl(struct net_device *dev)
 	dhd_info_t *dhd = *(dhd_info_t **)netdev_priv(dev);
 
 	dhd_preinit_ioctls(&dhd->pub);
+}
+
+int dhd_os_wake_lock_timeout(dhd_pub_t *pub)
+{
+	dhd_info_t *dhd = (dhd_info_t *)(pub->info);
+	unsigned long flags;
+	int ret = 0;
+
+	spin_lock_irqsave(&dhd->wl_lock, flags);
+	if (dhd) {
+#ifdef CONFIG_HAS_WAKELOCK
+		if (dhd->wl_packet)
+			wake_lock_timeout(&dhd->wl_rxwake, (HZ >> 1));
+#endif
+		dhd->wl_packet = 0;
+	}
+	ret = dhd->wl_packet;
+	spin_unlock_irqrestore(&dhd->wl_lock, flags);
+	/* printk("%s: %d\n", __FUNCTION__, ret); */
+	return ret;
+}
+
+int dhd_os_wake_lock(dhd_pub_t *pub)
+{
+	dhd_info_t *dhd = (dhd_info_t *)(pub->info);
+	unsigned long flags;
+	int ret = 0;
+
+	spin_lock_irqsave(&dhd->wl_lock, flags);
+	if (dhd) {
+#ifdef CONFIG_HAS_WAKELOCK
+		if (!dhd->wl_count)
+			wake_lock(&dhd->wl_wifi);
+#endif
+		dhd->wl_count++;
+		ret = dhd->wl_count;
+	}
+	spin_unlock_irqrestore(&dhd->wl_lock, flags);
+	if (ret > 2)
+		printk("%s: Warning: %d\n", __FUNCTION__, ret);
+	return ret;
+}
+
+int dhd_os_wake_unlock(dhd_pub_t *pub)
+{
+	dhd_info_t *dhd = (dhd_info_t *)(pub->info);
+	unsigned long flags;
+	int ret = 0;
+
+	spin_lock_irqsave(&dhd->wl_lock, flags);
+	if (dhd && dhd->wl_count) {
+		dhd->wl_count--;
+#ifdef CONFIG_HAS_WAKELOCK
+		if (!dhd->wl_count)
+			wake_unlock(&dhd->wl_wifi);
+#endif
+		ret = dhd->wl_count;
+	}
+	spin_unlock_irqrestore(&dhd->wl_lock, flags);
+	/* printk("%s: %d\n", __FUNCTION__, ret); */
+	return ret;
+}
+
+void dhd_os_set_irq(unsigned int irq, dhd_pub_t *pub)
+{
+	dhd_info_t *dhd = (dhd_info_t *)(pub->info);
+
+	dhd->oob_irq = irq;
+	disable_irq(irq);
+	dhd->oob_irq_flag = 0;
+}
+
+void dhd_os_disable_irq(dhd_pub_t *pub)
+{
+	dhd_info_t *dhd = (dhd_info_t *)(pub->info);
+
+	disable_irq_nosync(dhd->oob_irq);
+	dhd->oob_irq_flag = 0;
+}
+
+void dhd_os_enable_irq(dhd_pub_t *pub)
+{
+	dhd_info_t *dhd = (dhd_info_t *)(pub->info);
+
+	if (!(dhd->oob_irq_flag)) {
+		dhd->oob_irq_flag = 1;
+		enable_irq(dhd->oob_irq);
+	}
 }
