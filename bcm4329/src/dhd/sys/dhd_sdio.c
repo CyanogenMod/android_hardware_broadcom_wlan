@@ -293,6 +293,11 @@ static int tx_packets[NUMPRIO];
 /* Deferred transmit */
 const uint dhd_deferred_tx = 1;
 
+#if !defined(CONTINUOUS_WATCHDOG)
+extern uint dhd_watchdog_ms;
+extern void dhd_os_wd_timer(void *bus, uint wdtick);
+#endif /* !defined(CONTINUOUS_WATCHDOG) */
+
 /* Tx/Rx bounds */
 uint dhd_txbound;
 uint dhd_rxbound;
@@ -687,8 +692,12 @@ dhdsdio_clkctl(dhd_bus_t *bus, uint target, bool pendok)
 
 	/* Early exit if we're already there */
 	if (bus->clkstate == target) {
-		if (target == CLK_AVAIL)
+		if (target == CLK_AVAIL) {
+#if !defined(CONTINUOUS_WATCHDOG)
+			dhd_os_wd_timer(bus->dhd, dhd_watchdog_ms);
+#endif /* !defined(CONTINUOUS_WATCHDOG) */
 			bus->activity = TRUE;
+		}
 		return BCME_OK;
 	}
 
@@ -699,6 +708,9 @@ dhdsdio_clkctl(dhd_bus_t *bus, uint target, bool pendok)
 			dhdsdio_sdclk(bus, TRUE);
 		/* Now request HT Avail on the backplane */
 		dhdsdio_htclk(bus, TRUE, pendok);
+#if !defined(CONTINUOUS_WATCHDOG)
+		dhd_os_wd_timer(bus->dhd, dhd_watchdog_ms);
+#endif /* !defined(CONTINUOUS_WATCHDOG) */
 		bus->activity = TRUE;
 		break;
 
@@ -711,6 +723,9 @@ dhdsdio_clkctl(dhd_bus_t *bus, uint target, bool pendok)
 		else
 			DHD_ERROR(("dhdsdio_clkctl: request for %d -> %d\n",
 			           bus->clkstate, target));
+#if !defined(CONTINUOUS_WATCHDOG)
+		dhd_os_wd_timer(bus->dhd, dhd_watchdog_ms);
+#endif /* !defined(CONTINUOUS_WATCHDOG) */
 		break;
 
 	case CLK_NONE:
@@ -719,6 +734,9 @@ dhdsdio_clkctl(dhd_bus_t *bus, uint target, bool pendok)
 			dhdsdio_htclk(bus, FALSE, FALSE);
 		/* Now remove the SD clock */
 		dhdsdio_sdclk(bus, FALSE);
+#if !defined(CONTINUOUS_WATCHDOG)
+		dhd_os_wd_timer(bus->dhd, 0);
+#endif /* !defined(CONTINUOUS_WATCHDOG) */
 		break;
 	}
 #ifdef DHD_DEBUG
@@ -4002,7 +4020,9 @@ dhdsdio_isr(void *arg)
 
 #if defined(SDIO_ISR_THREAD)
 	DHD_TRACE(("Calling dhdsdio_dpc() from %s\n", __FUNCTION__));
+	dhd_os_wake_lock(bus->dhd);
 	while (dhdsdio_dpc(bus));
+	dhd_os_wake_unlock(bus->dhd);
 #else
 	bus->dpc_sched = TRUE;
 	dhd_sched_dpc(bus->dhd);
@@ -4823,7 +4843,6 @@ dhd_bus_download_firmware(struct dhd_bus *bus, osl_t *osh,
 
 	ret = dhdsdio_download_firmware(bus, osh, bus->sdh);
 
-
 	return ret;
 }
 
@@ -4833,12 +4852,13 @@ dhdsdio_download_firmware(struct dhd_bus *bus, osl_t *osh, void *sdh)
 	bool ret;
 
 	/* Download the firmware */
+	dhd_os_wake_lock(bus->dhd);
 	dhdsdio_clkctl(bus, CLK_AVAIL, FALSE);
 
 	ret = _dhdsdio_download_firmware(bus) == 0;
 
 	dhdsdio_clkctl(bus, CLK_SDONLY, FALSE);
-
+	dhd_os_wake_unlock(bus->dhd);
 	return ret;
 }
 
@@ -4853,13 +4873,14 @@ dhdsdio_release(dhd_bus_t *bus, osl_t *osh)
 
 
 		if (bus->dhd) {
+
+			dhdsdio_release_dongle(bus, osh);
+
 			dhd_detach(bus->dhd);
 			bus->dhd = NULL;
 		}
 
 		dhdsdio_release_malloc(bus, osh);
-
-		dhdsdio_release_dongle(bus, osh);
 
 		/* De-register interrupt handler */
 		bcmsdh_intr_dereg(bus->sdh);

@@ -46,17 +46,15 @@
 #include <linux/ethtool.h>
 #include <asm/uaccess.h>
 #include <asm/unaligned.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_HAS_WAKELOCK)
-#include <linux/wakelock.h>
-#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined (CONFIG_HAS_WAKELOCK) */
+
 /* The kernel threading is sdio-specific */
 #else /* LINUX */
 #define ENOMEM		1
-#define EFAULT      2
+#define EFAULT		2
 #define EINVAL		3
-#define EIO			4
+#define EIO		4
 #define ETIMEDOUT	5
-#define ERESTARTSYS 6
+#define ERESTARTSYS	6
 #endif /* LINUX */
 
 #include <wlioctl.h>
@@ -149,9 +147,6 @@ typedef struct dhd_pub {
 	int dongle_error;
 
 	uint8 country_code[WLC_CNTRY_BUF_SZ];
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_HAS_WAKELOCK)
-	struct wake_lock wakelock[WAKE_LOCK_MAX];
-#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined (CONFIG_HAS_WAKELOCK) */
 } dhd_pub_t;
 
 #ifdef NDIS60
@@ -208,41 +203,11 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(wdf_device_info_t, dhd_get_wdf_device_info)
 	#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_PM_SLEEP) */
 #define DHD_IF_VIF	0x01	/* Virtual IF (Hidden from user) */
 
-inline static void WAKE_LOCK_INIT(dhd_pub_t * dhdp, int index, char * y)
-{
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_HAS_WAKELOCK)
-	wake_lock_init(&dhdp->wakelock[index], WAKE_LOCK_SUSPEND, y);
-#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined (CONFIG_HAS_WAKELOCK) */
-}
-
-inline static void WAKE_LOCK(dhd_pub_t * dhdp, int index)
-{
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_HAS_WAKELOCK)
-	wake_lock(&dhdp->wakelock[index]);
-#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined (CONFIG_HAS_WAKELOCK) */
-}
-
-inline static void WAKE_UNLOCK(dhd_pub_t * dhdp, int index)
-{
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_HAS_WAKELOCK)
-	wake_unlock(&dhdp->wakelock[index]);
-#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined (CONFIG_HAS_WAKELOCK) */
-}
-
-inline static void WAKE_LOCK_TIMEOUT(dhd_pub_t * dhdp, int index, long time)
-{
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_HAS_WAKELOCK)
-	wake_lock_timeout(&dhdp->wakelock[index], time);
-#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined (CONFIG_HAS_WAKELOCK) */
-}
-
-inline static void WAKE_LOCK_DESTROY(dhd_pub_t * dhdp, int index)
-{
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_HAS_WAKELOCK)
-	wake_lock_destroy(&dhdp->wakelock[index]);
-#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined (CONFIG_HAS_WAKELOCK) */
-}
-
+/* Wakelock Functions */
+extern int dhd_os_wake_lock(dhd_pub_t *pub);
+extern int dhd_os_wake_unlock(dhd_pub_t *pub);
+extern int dhd_os_wake_lock_timeout(dhd_pub_t *pub);
+extern int dhd_os_wake_lock_timeout_enable(dhd_pub_t *pub);
 
 typedef struct dhd_if_event {
 	uint8 ifidx;

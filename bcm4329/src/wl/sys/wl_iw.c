@@ -56,8 +56,8 @@ typedef const struct si_pub  si_t;
 
 #include <wl_iw.h>
 
-
 #include <linux/rtnetlink.h>
+#include <linux/mutex.h>
 
 #define WL_IW_USE_ISCAN  1
 #define ENABLE_ACTIVE_PASSIVE_SCAN_SUPPRESS  1
@@ -69,6 +69,7 @@ typedef const struct si_pub  si_t;
 	} while (0)
 
 static int		g_onoff = G_WLAN_SET_ON;
+static struct mutex	wl_start_lock;
 
 extern bool wl_iw_conn_status_str(uint32 event_type, uint32 status,
 	uint32 reason, char* stringBuf, uint buflen);
@@ -133,9 +134,9 @@ wl_iw_ss_cache_ctrl_t g_ss_cache_ctrl;
 
 #if defined(WL_IW_USE_ISCAN)
 
+static wlc_ssid_t g_specific_ssid;     /* chache specific ssid request */
 #define ISCAN_STATE_IDLE   0
 #define ISCAN_STATE_SCANING 1
-
 
 #define WLC_IW_ISCAN_MAXLEN   2048
 typedef struct iscan_buf {
@@ -756,18 +757,18 @@ wl_iw_send_priv_event(
 	return 0;
 }
 
+#ifdef WL_IW_USE_THREAD_WL_OFF
 static int
 _wl_control_sysioc_thread_wl_off(void *data)
 {
 	struct wl_ctrl *wl_ctl = (struct wl_ctrl *)data;
 
-	wl_iw_t *iw = *(wl_iw_t **)netdev_priv(wl_ctl->dev);
 	DAEMONIZE("wlcontrol_sysioc");
 
 	WL_TRACE(("%s Entered\n", __FUNCTION__));
+	net_os_wake_lock(wl_ctl->dev);
 
-	WAKE_LOCK_INIT(iw->pub, WAKE_LOCK_OFF, "sysioc_thread_wl_off");
-	WAKE_LOCK(iw->pub, WAKE_LOCK_OFF);
+	mutex_lock(&wl_start_lock);
 	while (down_interruptible(&wl_ctl->timer_sem) == 0) {
 
 		WL_TRACE(("%s Turning off wifi dev\n", __FUNCTION__));
@@ -788,17 +789,50 @@ _wl_control_sysioc_thread_wl_off(void *data)
 
 		wl_iw_send_priv_event(wl_ctl->dev, "STOP");
 
+		net_os_wake_lock_timeout_enable(wl_ctl->dev);
 		break;
 	}
-
+	mutex_unlock(&wl_start_lock);
 	WL_TRACE(("%s Exited\n", __FUNCTION__));
-	WAKE_UNLOCK(iw->pub, WAKE_LOCK_OFF);
-	WAKE_LOCK_DESTROY(iw->pub, WAKE_LOCK_OFF);
+	net_os_wake_unlock(wl_ctl->dev);
 
 	complete_and_exit(&wl_ctl->sysioc_exited, 0);
 	KILL_PROC(wl_ctl->sysioc_pid, SIGTERM);
 }
+#endif
 
+int
+wl_control_wl_start(struct net_device *dev)
+{
+	int ret = 0;
+
+	WL_TRACE(("Enter %s \n", __FUNCTION__));
+
+	mutex_lock(&wl_start_lock);
+	if (g_onoff == G_WLAN_SET_OFF) {
+		dhd_customer_gpio_wlan_ctrl(WLAN_RESET_ON);
+
+#if defined(BCMLXSDMMC)
+		sdioh_start(NULL, 0);
+#endif
+
+		dhd_dev_reset(dev, 0);
+
+#if defined(BCMLXSDMMC)
+		sdioh_start(NULL, 1);
+#endif
+
+		dhd_dev_init_ioctl(dev);
+
+		g_onoff = G_WLAN_SET_ON;
+	}
+	WL_TRACE(("Exited %s \n", __FUNCTION__));
+
+	mutex_unlock(&wl_start_lock);
+	return ret;
+}
+
+#ifdef WL_IW_USE_THREAD_WL_OFF
 static void
 wl_iw_stop_timerfunc(ulong data)
 {
@@ -810,6 +844,7 @@ wl_iw_stop_timerfunc(ulong data)
 
 	up(&wl_ctl->timer_sem);
 }
+#endif
 
 static int
 wl_iw_control_wl_off(
@@ -818,19 +853,18 @@ wl_iw_control_wl_off(
 )
 {
 	int ret = 0;
+#ifdef WL_IW_USE_THREAD_WL_OFF
 	static struct wl_ctrl ctl;
 	static struct timer_list timer;
-
+#endif
 	WL_TRACE(("Enter %s\n", __FUNCTION__));
 
-	
-	
+#ifdef WL_IW_USE_THREAD_WL_OFF
 	ctl.timer = &timer;
 	ctl.dev = dev;
 	sema_init(&ctl.timer_sem, 0);
 	init_completion(&ctl.sysioc_exited);
 
-	
 	ctl.sysioc_pid = kernel_thread(_wl_control_sysioc_thread_wl_off, &ctl, 0);
 
 	timer.data = (ulong)&ctl;
@@ -838,7 +872,28 @@ wl_iw_control_wl_off(
 	init_timer(&timer);
 	timer.expires = jiffies + 2000 * HZ / 1000;
 	add_timer(&timer);
+#else
+	mutex_lock(&wl_start_lock);
+	if (g_onoff == G_WLAN_SET_ON) {
+		g_onoff = G_WLAN_SET_OFF;
+#if defined(WL_IW_USE_ISCAN)
+		g_iscan->iscan_state = ISCAN_STATE_IDLE;
+#endif
 
+		dhd_dev_reset(dev, 1);
+
+#if defined(BCMLXSDMMC)
+		sdioh_stop(NULL);
+#endif
+
+		dhd_customer_gpio_wlan_ctrl(WLAN_RESET_OFF);
+
+		wl_iw_send_priv_event(dev, "STOP");
+
+		net_os_wake_lock_timeout_enable(dev);
+	}
+	mutex_unlock(&wl_start_lock);
+#endif
 	WL_TRACE(("Exited %s\n", __FUNCTION__));
 
 	return ret;
@@ -854,25 +909,11 @@ wl_iw_control_wl_on(
 
 	WL_TRACE(("Enter %s \n", __FUNCTION__));
 
-	if (g_onoff == G_WLAN_SET_OFF) {
-		dhd_customer_gpio_wlan_ctrl(WLAN_RESET_ON);
-
-#if defined(BCMLXSDMMC)
-		 sdioh_start(NULL, 0);
-#endif
-
-		dhd_dev_reset(dev, 0);
-
-#if defined(BCMLXSDMMC)
-		 sdioh_start(NULL, 1);
-#endif
-
-		 dhd_dev_init_ioctl(dev);
-
-		g_onoff = G_WLAN_SET_ON;
-	}
+	ret = wl_control_wl_start(dev);
 
 	wl_iw_send_priv_event(dev, "START");
+
+	net_os_wake_lock_timeout_enable(dev);
 
 	WL_TRACE(("Exited %s \n", __FUNCTION__));
 
@@ -1709,6 +1750,18 @@ wl_iw_iscan_get(iscan_info_t *iscan)
 	return status;
 }
 
+static void wl_iw_force_specific_scan(iscan_info_t *iscan)
+{
+	WL_TRACE(("### Force Specific SCAN for %s\n", g_specific_ssid.SSID));
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
+	rtnl_lock();
+#endif
+	(void) dev_wlc_ioctl(iscan->dev, WLC_SCAN, &g_specific_ssid, sizeof(g_specific_ssid));
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
+	rtnl_unlock();
+#endif
+}
+
 static void wl_iw_send_scan_complete(iscan_info_t *iscan)
 {
 #ifndef SANDGATE2G
@@ -1726,7 +1779,7 @@ _iscan_sysioc_thread(void *data)
 {
 	uint32 status;
 	iscan_info_t *iscan = (iscan_info_t *)data;
-
+	static bool iscan_pass_abort = FALSE;
 	DAEMONIZE("iscan_sysioc");
 
 	status = WL_SCAN_RESULTS_PARTIAL;
@@ -1744,18 +1797,25 @@ _iscan_sysioc_thread(void *data)
 		rtnl_unlock();
 #endif
 
+		if (g_scan_specified_ssid && (iscan_pass_abort == TRUE)) {
+			WL_TRACE(("%s Get results from specific scan sttaus=%d\n", __FUNCTION__, status));
+			wl_iw_send_scan_complete(iscan);
+			iscan_pass_abort = FALSE;
+			status  = -1;
+		}
+
 		switch (status) {
 			case WL_SCAN_RESULTS_PARTIAL:
 				WL_TRACE(("iscanresults incomplete\n"));
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
 				rtnl_lock();
 #endif
-				
+
 				wl_iw_iscan(iscan, NULL, WL_SCAN_ACTION_CONTINUE);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
 				rtnl_unlock();
 #endif
-				
+
 				mod_timer(&iscan->timer, jiffies + iscan->timer_ms*HZ/1000);
 				iscan->timer_on = 1;
 				break;
@@ -1766,19 +1826,24 @@ _iscan_sysioc_thread(void *data)
 				break;
 			case WL_SCAN_RESULTS_PENDING:
 				WL_TRACE(("iscanresults pending\n"));
-				
+
 				mod_timer(&iscan->timer, jiffies + iscan->timer_ms*HZ/1000);
 				iscan->timer_on = 1;
 				break;
 			case WL_SCAN_RESULTS_ABORTED:
 				WL_TRACE(("iscanresults aborted\n"));
 				iscan->iscan_state = ISCAN_STATE_IDLE;
-				wl_iw_send_scan_complete(iscan);
+				if (g_scan_specified_ssid == 0)
+					wl_iw_send_scan_complete(iscan);
+				else {
+					iscan_pass_abort = TRUE;
+					wl_iw_force_specific_scan(iscan);
+				}
 				break;
 			default:
 				WL_TRACE(("iscanresults returned unknown status %d\n", status));
 				break;
-		 }
+		}
 	}
 
 	if (iscan->timer_on) {
@@ -2043,8 +2108,6 @@ wl_iw_set_scan(
 	char *extra
 )
 {
-	wlc_ssid_t ssid;
-
 	WL_TRACE(("%s: SIOCSIWSCAN\n", dev->name));
 
 	
@@ -2052,7 +2115,7 @@ wl_iw_set_scan(
 		return 0;
 
 	
-	memset(&ssid, 0, sizeof(ssid));
+	memset(&g_specific_ssid, 0, sizeof(g_specific_ssid));
 	g_scan_specified_ssid	= 0;
 
 #if WIRELESS_EXT > 17
@@ -2060,16 +2123,16 @@ wl_iw_set_scan(
 	if (wrqu->data.length == sizeof(struct iw_scan_req)) {
 		if (wrqu->data.flags & IW_SCAN_THIS_ESSID) {
 			struct iw_scan_req *req = (struct iw_scan_req *)extra;
-			ssid.SSID_len = MIN(sizeof(ssid.SSID), req->essid_len);
-			memcpy(ssid.SSID, req->essid, ssid.SSID_len);
-			ssid.SSID_len = htod32(ssid.SSID_len);
+			g_specific_ssid.SSID_len = MIN(sizeof(g_specific_ssid.SSID), req->essid_len);
+			memcpy(g_specific_ssid.SSID, req->essid, g_specific_ssid.SSID_len);
+			g_specific_ssid.SSID_len = htod32(g_specific_ssid.SSID_len);
 			g_scan_specified_ssid = 1;
-			WL_TRACE(("Specific scan ssid=%s len=%d\n", ssid.SSID, ssid.SSID_len));
+			WL_TRACE(("Specific scan ssid=%s len=%d\n", g_specific_ssid.SSID, g_specific_ssid.SSID_len));
 		}
 	}
 #endif
 	
-	(void) dev_wlc_ioctl(dev, WLC_SCAN, &ssid, sizeof(ssid));
+	(void) dev_wlc_ioctl(dev, WLC_SCAN, &g_specific_ssid, sizeof(g_specific_ssid));
 
 	return 0;
 }
@@ -3768,7 +3831,6 @@ wl_iw_set_priv(
 	int ret = 0;
 	char * extra;
 
-	wl_iw_t *iw = *(wl_iw_t **)netdev_priv(dev);
 	if (!(extra = kmalloc(dwrq->length, GFP_KERNEL)))
 	    return -ENOMEM;
 
@@ -3780,17 +3842,20 @@ wl_iw_set_priv(
 	WL_TRACE(("%s: SIOCSIWPRIV requst = %s\n",
 		dev->name, extra));
 
+	net_os_wake_lock(dev);
 	
 	if (dwrq->length && extra) {
-		WAKE_LOCK_INIT(iw->pub, WAKE_LOCK_PRIV, "wl_iw_set_priv");
-		WAKE_LOCK(iw->pub, WAKE_LOCK_PRIV);
-
 		if (g_onoff == G_WLAN_SET_OFF) {
-			wl_iw_control_wl_on(dev, info);
-			if (strnicmp(extra, "START", strlen("START")) != 0)
-				WL_TRACE(("%s, missing START, simulate START\n", __FUNCTION__));
-			else
+			if (strnicmp(extra, "START", strlen("START")) != 0) {
+				WL_TRACE(("%s, missing START, Fail\n", __FUNCTION__));
+				kfree(extra);
+				net_os_wake_unlock(dev);
+				return -EFAULT;
+			}
+			else {
+				wl_iw_control_wl_on(dev, info);
 				WL_TRACE(("%s, Received regular START command\n", __FUNCTION__));
+			}
 		}
 
 	    if (strnicmp(extra, "SCAN-ACTIVE", strlen("SCAN-ACTIVE")) == 0) {
@@ -3823,9 +3888,9 @@ wl_iw_set_priv(
 			dwrq->length = strlen("OK") + 1;
 			WL_TRACE(("Unkown PRIVATE command , ignored\n"));
 		}
-		WAKE_UNLOCK(iw->pub, WAKE_LOCK_PRIV);
-		WAKE_LOCK_DESTROY(iw->pub, WAKE_LOCK_PRIV);
 	}
+
+	net_os_wake_unlock(dev);
 
 	if (extra) {
 	    if (copy_to_user(dwrq->pointer, extra, dwrq->length)) {
@@ -4218,7 +4283,6 @@ wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data)
 	memset(&wrqu, 0, sizeof(wrqu));
 	memset(extra, 0, sizeof(extra));
 
-	
 	switch (event_type) {
 	case WLC_E_TXFAIL:
 		cmd = IWEVTXDROP;
@@ -4336,14 +4400,19 @@ wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data)
 #if defined(WL_IW_USE_ISCAN)
 		if ((g_iscan) && (g_iscan->sysioc_pid >= 0) &&
 			(g_iscan->iscan_state != ISCAN_STATE_IDLE))
+		{
 			up(&g_iscan->sysioc_sem);
-#else
-		cmd = SIOCGIWSCAN;
+		} else {
 			cmd = SIOCGIWSCAN;
 			wrqu.data.length = strlen(extra);
-			WL_TRACE(("Event WLC_E_SCAN_COMPLETE\n"));
+			WL_TRACE(("Event WLC_E_SCAN_COMPLETE from specific scan\n"));
+		}
+#else
+		cmd = SIOCGIWSCAN;
+		wrqu.data.length = strlen(extra);
+		WL_TRACE(("Event WLC_E_SCAN_COMPLETE\n"));
 #endif 
-	break;
+		break;
 
 	default:
 		
@@ -4351,8 +4420,8 @@ wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data)
 		break;
 	}
 #ifndef SANDGATE2G
-		if (cmd)
-			wireless_send_event(dev, cmd, &wrqu, extra);
+	if (cmd)
+		wireless_send_event(dev, cmd, &wrqu, extra);
 #endif
 
 #if WIRELESS_EXT > 14
@@ -4626,6 +4695,7 @@ int wl_iw_attach(struct net_device *dev, void * dhdp)
 	if (iscan->sysioc_pid < 0)
 		return -ENOMEM;
 #endif 
+	mutex_init(&wl_start_lock);
 
 	iw = *(wl_iw_t **)netdev_priv(dev);
 	iw->pub = (dhd_pub_t *)dhdp;
@@ -4639,12 +4709,9 @@ int wl_iw_attach(struct net_device *dev, void * dhdp)
 	memset(g_scan, 0, G_SCAN_RESULTS);
 	g_scan_specified_ssid = 0;
 
-	
 	wl_iw_init_ss_cache_ctrl();
 	
 	wl_iw_bt_init(dev);
-
-
 
 	return 0;
 }

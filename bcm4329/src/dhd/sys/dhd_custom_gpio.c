@@ -43,6 +43,12 @@ extern  void bcm_wlan_power_off(int);
 extern  void bcm_wlan_power_on(int);
 #endif /* CUSTOMER_HW */
 
+#ifdef CUSTOMER_HW2
+int wifi_set_carddetect(int on);
+int wifi_set_power(int on, unsigned long msec);
+int wifi_get_irq_number(void);
+#endif
+
 #if defined(OOB_INTR_ONLY)
 
 #if defined(BCMLXSDMMC)
@@ -57,7 +63,10 @@ MODULE_PARM_DESC(dhd_oob_gpio_num, "DHD oob gpio number");
 
 int dhd_customer_oob_irq_map(void)
 {
-int  host_oob_irq;
+	int  host_oob_irq;
+#ifdef CUSTOMER_HW2
+	host_oob_irq = wifi_get_irq_number();
+#else
 #if defined(CUSTOM_OOB_GPIO_NUM)
 	if (dhd_oob_gpio_num < 0) {
 		dhd_oob_gpio_num = CUSTOM_OOB_GPIO_NUM;
@@ -75,6 +84,7 @@ int  host_oob_irq;
 
 	/* TODO : move it mmc specific code */
 	host_oob_irq = sdioh_mmc_irq(dhd_oob_gpio_num);
+#endif
 	return (host_oob_irq);
 }
 #endif /* defined(OOB_INTR_ONLY) */
@@ -90,6 +100,9 @@ dhd_customer_gpio_wlan_ctrl(int onoff)
 #ifdef CUSTOMER_HW
 			bcm_wlan_power_off(2);
 #endif /* CUSTOMER_HW */
+#ifdef CUSTOMER_HW2
+			wifi_set_power(0, 0);
+#endif
 			WL_ERROR(("=========== WLAN placed in RESET ========\n"));
 		break;
 
@@ -99,6 +112,9 @@ dhd_customer_gpio_wlan_ctrl(int onoff)
 #ifdef CUSTOMER_HW
 			bcm_wlan_power_on(2);
 #endif /* CUSTOMER_HW */
+#ifdef CUSTOMER_HW2
+			wifi_set_power(1, 0);
+#endif
 			WL_ERROR(("=========== WLAN going back to live  ========\n"));
 		break;
 
