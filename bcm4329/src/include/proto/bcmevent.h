@@ -24,7 +24,7 @@
  *
  * Dependencies: proto/bcmeth.h
  *
- * $Id: bcmevent.h,v 9.34.4.1.20.12 2009/05/24 17:00:58 Exp $
+ * $Id: bcmevent.h,v 9.34.4.1.20.16 2009/09/25 23:52:38 Exp $
  *
  */
 
@@ -131,7 +131,9 @@ typedef BWL_PRE_PACKED_STRUCT struct bcm_event {
 #define WLC_E_ACTION_FRAME      58      
 #define WLC_E_ACTION_FRAME_COMPLETE 59  
 
-#define WLC_E_LAST		60	
+#define WLC_E_ESCAN_RESULT 69               
+#define WLC_E_WAKE_EVENT	70	
+#define WLC_E_LAST		71	
 	
 
 

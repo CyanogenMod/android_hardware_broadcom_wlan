@@ -4,7 +4,7 @@
 #  and sources(windows style makefile). it doesn't depend on 
 #  Makerules.env except to get SRCBASE if not yet defined. 
 #
-#  $Id: GNUmakefile.inc,v 1.103.50.1 2009/05/20 19:39:45 Exp $
+#  $Id: GNUmakefile.inc,v 1.103.50.2 2009/08/18 18:42:30 Exp $
 
 SHELL=bash
 export SHELL
@@ -540,11 +540,15 @@ define calculate_dependencies
 	| sed '\''s?$*\.o[ :]*?$@ &?g'\'' >$@'
 endef
 
+# OTHER_SOURCES_PROCESSED removes recursive build of OTHER_SOURCES, when that
+# switch is set from cmd line
 ifdef OTHER_SOURCES
+ifndef OTHER_SOURCES_PROCESSED
 all clean :: $(OTHER_SOURCES)
 	@echo "Go through OTHER_SOURCES: $(OTHER_SOURCES)"
-	$(foreach SRCFILE,$(OTHER_SOURCES),$(MAKE) SRCFILE=$(SRCFILE) TTYPE=$(TTYPE) $@; )
-endif
+	$(foreach SRCFILE,$(OTHER_SOURCES),$(MAKE) SRCFILE=$(SRCFILE) TTYPE=$(TTYPE) OTHER_SOURCES_PROCESSED=true $@; )
+endif # OTHER_SOURCES_PROCESSED
+endif # OTHER_SOURCES
 
 vpath %.Lib $(LIBVPATH)
 vpath %.LIB $(LIBVPATH)

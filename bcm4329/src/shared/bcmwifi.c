@@ -22,7 +22,7 @@
  *      Notwithstanding the above, under no circumstances may you combine this
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
- * $Id: bcmwifi.c,v 1.18.24.2 2008/08/01 21:52:06 Exp $
+ * $Id: bcmwifi.c,v 1.18.24.2.4.1 2009/09/25 00:32:01 Exp $
  */
 
 
@@ -83,7 +83,7 @@ wf_chspec_ntoa(chanspec_t chspec, char *buf)
 chanspec_t
 wf_chspec_aton(char *a)
 {
-	char *endp;
+	char *endp = NULL;
 	uint channel, band, bw, ctl_sb;
 	char c;
 

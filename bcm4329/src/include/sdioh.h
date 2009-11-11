@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: sdioh.h,v 13.13.18.1.16.1 2008/08/26 23:49:40 Exp $
+ * $Id: sdioh.h,v 13.13.18.1.16.2 2009/07/28 17:54:46 Exp $
  */
 
 #ifndef	_SDIOH_H
@@ -211,7 +211,7 @@
 #define SW_RESET_DAT_M		BITFIELD_MASK(1)	/* Bit 2	DAT Line Reset */
 #define SW_RESET_DAT_S		2
 
-/* SD_IntStatus: Offset 0x030, size = 2 bytes */
+/* SD_IntrStatus: Offset 0x030, size = 2 bytes */
 /* Defs also serve SD_IntrStatusEnable and SD_IntrSignalEnable */
 #define INTSTAT_CMD_COMPLETE_M		BITFIELD_MASK(1)	/* Bit 0 */
 #define INTSTAT_CMD_COMPLETE_S		0
@@ -277,7 +277,7 @@
 
 /* SD_WakeupCntr_BlockGapCntrl : Offset 0x02A , size = bytes */
 /* SD_ClockCntrl	: Offset 0x02C , size = bytes */
-/* SD_SoftwarewReset_TimeoutCntrl 	: Offset 0x02E , size = bytes */
+/* SD_SoftwareReset_TimeoutCntrl 	: Offset 0x02E , size = bytes */
 /* SD_IntrStatus	: Offset 0x030 , size = bytes */
 /* SD_ErrorIntrStatus 	: Offset 0x032 , size = bytes */
 /* SD_IntrStatusEnable	: Offset 0x034 , size = bytes */

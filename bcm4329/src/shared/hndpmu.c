@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: hndpmu.c,v 1.95.2.17.4.11.2.39 2009/06/25 16:07:18 Exp $
+ * $Id: hndpmu.c,v 1.95.2.17.4.11.2.50 2009/10/26 14:45:51 Exp $
  */
 
 #include <typedefs.h>
@@ -70,7 +70,7 @@ void
 si_sdiod_drive_strength_init(si_t *sih, osl_t *osh, uint32 drivestrength)
 {
 	chipcregs_t *cc;
-	uint origidx, intr_val;
+	uint origidx, intr_val = 0;
 	sdiod_drive_str_t *str_tab = NULL;
 	uint32 str_mask = 0;
 	uint32 str_shift = 0;

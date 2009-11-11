@@ -25,7 +25,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhdioctl.h,v 13.7.8.1.4.1.16.2 2009/02/03 18:36:10 Exp $
+ * $Id: dhdioctl.h,v 13.7.8.1.4.1.16.4 2009/09/05 16:50:35 Exp $
  */
 
 #ifndef _dhdioctl_h_
@@ -117,5 +117,6 @@ typedef struct dhd_pktgen {
 
 /* require default structure packing */
 #include <packed_section_end.h>
+
 
 #endif /* _dhdioctl_h_ */

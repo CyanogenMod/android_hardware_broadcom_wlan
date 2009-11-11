@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: aiutils.c,v 1.6.4.7.4.1 2008/11/03 15:16:48 Exp $
+ * $Id: aiutils.c,v 1.6.4.7.4.5 2009/09/25 00:32:01 Exp $
  */
 
 #include <typedefs.h>
@@ -35,6 +35,11 @@
 #include <pcicfg.h>
 
 #include "siutils_priv.h"
+
+STATIC uint32
+get_asd(si_t *sih, uint32 *eromptr, uint sp, uint ad, uint st,
+	uint32 *addrl, uint32 *addrh, uint32 *sizel, uint32 *sizeh);
+
 
 /* EROM parsing */
 
@@ -71,7 +76,7 @@ get_erom_ent(si_t *sih, uint32 *eromptr, uint32 mask, uint32 match)
 	return ent;
 }
 
-static uint32
+STATIC uint32
 get_asd(si_t *sih, uint32 *eromptr, uint sp, uint ad, uint st,
 	uint32 *addrl, uint32 *addrh, uint32 *sizel, uint32 *sizeh)
 {
@@ -422,6 +427,15 @@ ai_setint(si_t *sih, int siflag)
 {
 }
 
+void
+ai_write_wrap_reg(si_t *sih, uint32 offset, uint32 val)
+{
+	si_info_t *sii = SI_INFO(sih);
+	aidmp_t *ai = sii->curwrap;
+	W_REG(sii->osh, (uint32 *)((uint8 *)ai+offset), val);
+	return;
+}
+
 uint
 ai_corevendor(si_t *sih)
 {
@@ -481,6 +495,9 @@ ai_corereg(si_t *sih, uint coreidx, uint regoff, uint mask, uint val)
 	ASSERT(GOODIDX(coreidx));
 	ASSERT(regoff < SI_CORE_SIZE);
 	ASSERT((val & ~mask) == 0);
+
+	if (coreidx >= SI_MAXCORES)
+		return 0;
 
 	if (BUSTYPE(sih->bustype) == SI_BUS) {
 		/* If internal bus, we can always get at everything */

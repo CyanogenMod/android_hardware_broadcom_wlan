@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: linux_osl.h,v 13.131.30.1 2008/12/16 00:25:42 Exp $
+ * $Id: linux_osl.h,v 13.131.30.5 2009/10/27 04:42:45 Exp $
  */
 
 
@@ -108,7 +108,7 @@ extern uint osl_malloc_failed(osl_t *osh);
 
 
 #define	DMA_CONSISTENT_ALIGN	PAGE_SIZE
-#define	DMA_ALLOC_CONSISTENT(osh, size, pap, dmah) \
+#define	DMA_ALLOC_CONSISTENT(osh, size, pap, dmah, alignbits) \
 	osl_dma_alloc_consistent((osh), (size), (pap))
 #define	DMA_FREE_CONSISTENT(osh, va, size, pa, dmah) \
 	osl_dma_free_consistent((osh), (void*)(va), (size), (pa))
@@ -233,6 +233,10 @@ extern void osl_dma_unmap(osl_t *osh, uint pa, uint size, int direction);
 
 #define	PKTGET(osh, len, send)		osl_pktget((osh), (len))
 #define	PKTFREE(osh, skb, send)		osl_pktfree((osh), (skb), (send))
+#ifdef DHD_USE_STATIC_BUF
+#define	PKTGET_STATIC(osh, len, send)		osl_pktget_static((osh), (len))
+#define	PKTFREE_STATIC(osh, skb, send)		osl_pktfree_static((osh), (skb), (send))
+#endif 
 #define	PKTDATA(osh, skb)		(((struct sk_buff*)(skb))->data)
 #define	PKTLEN(osh, skb)		(((struct sk_buff*)(skb))->len)
 #define PKTHEADROOM(osh, skb)		(PKTDATA(osh, skb)-(((struct sk_buff*)(skb))->head))
@@ -245,10 +249,18 @@ extern void osl_dma_unmap(osl_t *osh, uint pa, uint size, int direction);
 #define	PKTDUP(osh, skb)		osl_pktdup((osh), (skb))
 #define	PKTTAG(skb)			((void*)(((struct sk_buff*)(skb))->cb))
 #define PKTALLOCED(osh)			((osl_pubinfo_t *)(osh))->pktalloced
+#define PKTSETPOOL(osh, skb, x, y)	do {} while (0)
+#define PKTPOOL(osh, skb)		FALSE
+#define PKTPOOLLEN(osh, pktp)		(0)
+#define PKTPOOLAVAIL(osh, pktp)		(0)
+#define PKTPOOLADD(osh, pktp, p)	BCME_ERROR
+#define PKTPOOLGET(osh, pktp)		NULL
 #define PKTLIST_DUMP(osh, buf)
 
 extern void *osl_pktget(osl_t *osh, uint len);
 extern void osl_pktfree(osl_t *osh, void *skb, bool send);
+extern void *osl_pktget_static(osl_t *osh, uint len);
+extern void osl_pktfree_static(osl_t *osh, void *skb, bool send);
 extern void *osl_pktdup(osl_t *osh, void *skb);
 
 

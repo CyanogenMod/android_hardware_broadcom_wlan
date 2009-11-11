@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: bcmsdstd.c,v 1.64.4.1.4.4.2.10 2009/05/22 00:31:44 Exp $
+ * $Id: bcmsdstd.c,v 1.64.4.1.4.4.2.14 2009/10/08 20:05:30 Exp $
  */
 
 #include <typedefs.h>
@@ -35,7 +35,6 @@
 #include <sdioh.h>	/* SDIO Host Controller Specification */
 #include <bcmsdbus.h>	/* bcmsdh to/from specific controller APIs */
 #include <sdiovar.h>	/* ioctl/iovars */
-
 #include <pcicfg.h>
 
 
@@ -853,9 +852,10 @@ sdioh_request_buffer(sdioh_info_t *sd, uint pio_dma, uint fix_inc, uint rw, uint
 				len++;
 				tmpbuf = buffer;
 				if ((localbuf = (uint8 *)MALLOC(sd->osh, len)) == NULL) {
-						sd_err(("out of memory, malloced %d bytes\n",
-						       MALLOCED(sd->osh)));
-						return SDIOH_API_RC_FAIL;
+					sd_err(("out of memory, malloced %d bytes\n",
+					        MALLOCED(sd->osh)));
+					sdstd_unlock(sd);
+					return SDIOH_API_RC_FAIL;
 				}
 				bcopy(buffer, localbuf, len);
 				buffer = localbuf;
@@ -1312,6 +1312,20 @@ sdstd_host_init(sdioh_info_t *sd)
 	num_slots = (OSL_PCI_READ_CONFIG(sd->osh, SD_SlotInfo, 4) & 0xff) >> 4;
 	num_slots &= 7;
 	num_slots++;   	/* map bits to num slots according to spec */
+
+	if (OSL_PCI_READ_CONFIG(sd->osh, PCI_CFG_VID, 4) ==
+	    ((SDIOH_FPGA_ID << 16) | VENDOR_BROADCOM)) {
+		sd_err(("%s: Found Broadcom Standard SDIO Host Controller FPGA\n", __FUNCTION__));
+		/* Set BAR0 Window to SDIOSTH core */
+		OSL_PCI_WRITE_CONFIG(sd->osh, PCI_BAR0_WIN, 4, 0x18001000);
+
+		/* Set defaults particular to this controller. */
+		detect_slots = TRUE;
+		num_slots = 1;
+		first_bar = 0;
+
+		sd->sd_blockmode = FALSE;
+	}
 
 	/* Map in each slot on the board and query it to see if a
 	 * card is inserted.  Use the first populated slot found.
@@ -2781,7 +2795,8 @@ sd_map_dma(sdioh_info_t * sd)
 {
 	if (sd->sd_use_dma == FALSE)
 		return;
-	if ((sd->dma_buf = DMA_ALLOC_CONSISTENT(sd->osh, SD_PAGE, &sd->dma_phys, 0x12)) == NULL) {
+	if ((sd->dma_buf = DMA_ALLOC_CONSISTENT(sd->osh, SD_PAGE, &sd->dma_phys,
+	0x12, 12)) == NULL) {
 		sd_err(("%s: DMA_ALLOC failed. Disabling DMA support.\n", __FUNCTION__));
 		sd->sd_use_dma = FALSE;
 	}

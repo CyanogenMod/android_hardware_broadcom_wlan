@@ -74,11 +74,7 @@ typedef struct cdc_ioctl {
 #define BDC_FLAG_VER_MASK	0xf0	/* Protocol version mask */
 #define BDC_FLAG_VER_SHIFT	4	/* Protocol version shift */
 
-#ifndef EXT_STA
 #define BDC_FLAG__UNUSED	0x03	/* Unassigned */
-#else
-#define BDC_FLAG_EXEMPT		0x03	/* Vista/EXT_STA: use for encryption exemption */
-#endif /* EXT_STA */
 #define BDC_FLAG_SUM_GOOD	0x04	/* Dongle has verified good RX checksums */
 #define BDC_FLAG_SUM_NEEDED	0x08	/* Dongle needs to do TX checksums */
 

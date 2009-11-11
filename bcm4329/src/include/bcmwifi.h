@@ -22,7 +22,7 @@
  *      Notwithstanding the above, under no circumstances may you combine this
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
- * $Id: bcmwifi.h,v 1.15 2007/11/19 22:23:04 Exp $
+ * $Id: bcmwifi.h,v 1.15.30.1 2009/08/15 00:51:27 Exp $
  */
 
 
@@ -84,16 +84,29 @@ typedef uint16 chanspec_t;
 					((channel) <= CH_MAX_2G_CHANNEL ? WL_CHANSPEC_BAND_2G : \
 					WL_CHANSPEC_BAND_5G))
 #define CHSPEC_CHANNEL(chspec)	((uint8)(chspec & WL_CHANSPEC_CHAN_MASK))
-#define CHSPEC_CTL_SB(chspec)	(chspec & WL_CHANSPEC_CTL_SB_MASK)
-#define CHSPEC_BW(chspec)	(chspec & WL_CHANSPEC_BW_MASK)
 #define CHSPEC_BAND(chspec)	(chspec & WL_CHANSPEC_BAND_MASK)
 
+#ifdef WL20MHZ_ONLY
+
+#define CHSPEC_CTL_SB(chspec)	WL_CHANSPEC_CTL_SB_NONE
+#define CHSPEC_BW(chspec)	WL_CHANSPEC_BW_20
+#define CHSPEC_IS10(chspec)	0
+#define CHSPEC_IS20(chspec)	1
+#ifndef CHSPEC_IS40
+#define CHSPEC_IS40(chspec)	0
+#endif
+
+#else 
+
+#define CHSPEC_CTL_SB(chspec)	(chspec & WL_CHANSPEC_CTL_SB_MASK)
+#define CHSPEC_BW(chspec)	(chspec & WL_CHANSPEC_BW_MASK)
 #define CHSPEC_IS10(chspec)	((chspec & WL_CHANSPEC_BW_MASK) == WL_CHANSPEC_BW_10)
 #define CHSPEC_IS20(chspec)	((chspec & WL_CHANSPEC_BW_MASK) == WL_CHANSPEC_BW_20)
-
 #ifndef CHSPEC_IS40
 #define CHSPEC_IS40(chspec)	(((chspec) & WL_CHANSPEC_BW_MASK) == WL_CHANSPEC_BW_40)
 #endif
+
+#endif 
 
 #define CHSPEC_IS5G(chspec)	((chspec & WL_CHANSPEC_BAND_MASK) == WL_CHANSPEC_BAND_5G)
 #define CHSPEC_IS2G(chspec)	((chspec & WL_CHANSPEC_BAND_MASK) == WL_CHANSPEC_BAND_2G)

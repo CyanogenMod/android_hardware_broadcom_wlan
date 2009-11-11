@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: bcmsdbus.h,v 13.11.14.2.6.4 2009/04/13 19:00:01 Exp $
+ * $Id: bcmsdbus.h,v 13.11.14.2.6.6 2009/10/27 17:20:28 Exp $
  */
 
 #ifndef	_sdio_api_h_
@@ -73,11 +73,6 @@ extern SDIOH_API_RC sdioh_interrupt_set(sdioh_info_t *si, bool enable_disable);
 #if defined(DHD_DEBUG)
 extern bool sdioh_interrupt_pending(sdioh_info_t *si);
 #endif
-
-#ifdef BCMLXSDMMC
-extern int sdioh_claim_host_and_lock(sdioh_info_t *si);
-extern int sdioh_release_host_and_unlock(sdioh_info_t *si);
-#endif /* BCMLXSDMMC */
 
 /* read or write one byte using cmd52 */
 extern SDIOH_API_RC sdioh_request_byte(sdioh_info_t *si, uint rw, uint fnc, uint addr, uint8 *byte);

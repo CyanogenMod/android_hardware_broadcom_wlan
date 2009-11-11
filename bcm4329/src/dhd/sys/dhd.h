@@ -24,7 +24,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd.h,v 1.32.4.7.2.4.14.22 2009/06/04 23:07:40 Exp $
+ * $Id: dhd.h,v 1.32.4.7.2.4.14.25 2009/10/27 04:41:56 Exp $
  */
 
 /****************
@@ -46,6 +46,9 @@
 #include <linux/ethtool.h>
 #include <asm/uaccess.h>
 #include <asm/unaligned.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_HAS_WAKELOCK)
+#include <linux/wakelock.h>
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined (CONFIG_HAS_WAKELOCK) */
 /* The kernel threading is sdio-specific */
 #else /* LINUX */
 #define ENOMEM		1
@@ -75,6 +78,26 @@ enum dhd_bus_state {
 	DHD_BUS_DATA		/* Ready for frame transfers */
 };
 
+enum dhd_bus_wake_state {
+	WAKE_LOCK_OFF,
+	WAKE_LOCK_PRIV,
+	WAKE_LOCK_DPC,
+	WAKE_LOCK_IOCTL,
+	WAKE_LOCK_DOWNLOAD,
+	WAKE_LOCK_TMOUT,
+	WAKE_LOCK_WATCHDOG,
+	WAKE_LOCK_LINK_DOWN_TMOUT,
+	WAKE_LOCK_MAX
+};
+enum dhd_prealloc_index {
+	DHD_PREALLOC_PROT = 0,
+	DHD_PREALLOC_RXBUF,
+	DHD_PREALLOC_DATABUF,
+	DHD_PREALLOC_OSL_BUF
+};
+#ifdef DHD_USE_STATIC_BUF
+extern void * dhd_os_prealloc(int section, unsigned long size);
+#endif
 /* Common structure for module and instance linkage */
 typedef struct dhd_pub {
 	/* Linkage ponters */
@@ -126,6 +149,9 @@ typedef struct dhd_pub {
 	int dongle_error;
 
 	uint8 country_code[WLC_CNTRY_BUF_SZ];
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_HAS_WAKELOCK)
+	struct wake_lock wakelock[WAKE_LOCK_MAX];
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined (CONFIG_HAS_WAKELOCK) */
 } dhd_pub_t;
 
 #ifdef NDIS60
@@ -139,9 +165,90 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(wdf_device_info_t, dhd_get_wdf_device_info)
 
 #endif /* NDIS60 */
 
+	#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_PM_SLEEP)
+
+	#define DHD_PM_RESUME_WAIT_INIT(a) DECLARE_WAIT_QUEUE_HEAD(a);
+	#define _DHD_PM_RESUME_WAIT(a, b) do {\
+			int retry = 0; \
+			while (dhd_mmc_suspend && retry++ != b) { \
+				wait_event_timeout(a, FALSE, HZ/100); \
+			} \
+		} 	while (0)
+	#define DHD_PM_RESUME_WAIT(a) 			_DHD_PM_RESUME_WAIT(a, 30)
+	#define DHD_PM_RESUME_WAIT_FOREVER(a) 	_DHD_PM_RESUME_WAIT(a, ~0)
+	#define DHD_PM_RESUME_RETURN_ERROR(a)	do { if (dhd_mmc_suspend) return a; } while (0)
+	#define DHD_PM_RESUME_RETURN		do { if (dhd_mmc_suspend) return; } while (0)
+
+	#define DHD_SPINWAIT_SLEEP_INIT(a) DECLARE_WAIT_QUEUE_HEAD(a);
+	#define SPINWAIT_SLEEP(a, exp, us) do { \
+		uint countdown = (us) + 9; \
+		while ((exp) && (countdown >= 10)) { \
+			wait_event_timeout(a, FALSE, HZ/100); \
+			countdown -= 10; \
+		} \
+	} while (0)
+
+	#else
+
+	#define DHD_PM_RESUME_WAIT_INIT(a)
+	#define DHD_PM_RESUME_WAIT(a)
+	#define DHD_PM_RESUME_WAIT_FOREVER(a)
+	#define DHD_PM_RESUME_RETURN_ERROR(a)
+	#define DHD_PM_RESUME_RETURN
+
+	#define DHD_SPINWAIT_SLEEP_INIT(a)
+	#define SPINWAIT_SLEEP(a, exp, us)  do { \
+		uint countdown = (us) + 9; \
+		while ((exp) && (countdown >= 10)) { \
+			OSL_DELAY(10);  \
+			countdown -= 10;  \
+		} \
+	} while (0)
+
+	#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_PM_SLEEP) */
+#define DHD_IF_VIF	0x01	/* Virtual IF (Hidden from user) */
+
+inline static void WAKE_LOCK_INIT(dhd_pub_t * dhdp, int index, char * y)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_HAS_WAKELOCK)
+	wake_lock_init(&dhdp->wakelock[index], WAKE_LOCK_SUSPEND, y);
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined (CONFIG_HAS_WAKELOCK) */
+}
+
+inline static void WAKE_LOCK(dhd_pub_t * dhdp, int index)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_HAS_WAKELOCK)
+	wake_lock(&dhdp->wakelock[index]);
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined (CONFIG_HAS_WAKELOCK) */
+}
+
+inline static void WAKE_UNLOCK(dhd_pub_t * dhdp, int index)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_HAS_WAKELOCK)
+	wake_unlock(&dhdp->wakelock[index]);
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined (CONFIG_HAS_WAKELOCK) */
+}
+
+inline static void WAKE_LOCK_TIMEOUT(dhd_pub_t * dhdp, int index, long time)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_HAS_WAKELOCK)
+	wake_lock_timeout(&dhdp->wakelock[index], time);
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined (CONFIG_HAS_WAKELOCK) */
+}
+
+inline static void WAKE_LOCK_DESTROY(dhd_pub_t * dhdp, int index)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_HAS_WAKELOCK)
+	wake_lock_destroy(&dhdp->wakelock[index]);
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined (CONFIG_HAS_WAKELOCK) */
+}
+
+
 typedef struct dhd_if_event {
 	uint8 ifidx;
 	uint8 action;
+	uint8 flags;
+	uint8 bssidx;
 } dhd_if_event_t;
 
 /*
@@ -201,15 +308,13 @@ extern void dhd_os_sdunlock_txq(dhd_pub_t * pub);
 extern void dhd_os_sdlock_rxq(dhd_pub_t * pub);
 extern void dhd_os_sdunlock_rxq(dhd_pub_t * pub);
 extern void dhd_os_sdlock_sndup_rxq(dhd_pub_t * pub);
+extern void dhd_customer_gpio_wlan_ctrl(int onoff);
 extern void dhd_os_sdunlock_sndup_rxq(dhd_pub_t * pub);
+#if defined(OOB_INTR_ONLY)
+extern int dhd_customer_oob_irq_map(void);
+#endif /* defined(OOB_INTR_ONLY) */
 extern void dhd_os_sdtxlock(dhd_pub_t * pub);
 extern void dhd_os_sdtxunlock(dhd_pub_t * pub);
-extern void dhd_os_set_irq(unsigned int irq, dhd_pub_t *pub);
-extern void dhd_os_enable_irq(dhd_pub_t *pub);
-extern void dhd_os_disable_irq(dhd_pub_t *pub);
-extern int dhd_os_wake_lock(dhd_pub_t *pub);
-extern int dhd_os_wake_unlock(dhd_pub_t *pub);
-extern int dhd_os_wake_lock_timeout(dhd_pub_t *pub);
 
 int setScheduler(struct task_struct *p, int policy, struct sched_param *param);
 
@@ -224,14 +329,23 @@ extern void dhd_timeout_start(dhd_timeout_t *tmo, uint usec);
 extern int dhd_timeout_expired(dhd_timeout_t *tmo);
 
 extern int dhd_ifname2idx(struct dhd_info *dhd, char *name);
+extern uint8 *dhd_bssidx2bssid(dhd_pub_t *dhd, int idx);
 extern int wl_host_event(struct dhd_info *dhd, int *idx, void *pktdata,
                          wl_event_msg_t *, void **data_ptr);
 extern void wl_event_to_host_order(wl_event_msg_t * evt);
 
 extern void dhd_common_init(void);
 
-extern int dhd_add_if(struct dhd_info *dhd, int ifidx, void *handle, char *name, uint8 *mac_addr);
+extern int dhd_add_if(struct dhd_info *dhd, int ifidx, void *handle,
+	char *name, uint8 *mac_addr, uint32 flags, uint8 bssidx);
 extern void dhd_del_if(struct dhd_info *dhd, int ifidx);
+
+extern void dhd_vif_add(struct dhd_info *dhd, int ifidx, char * name);
+extern void dhd_vif_del(struct dhd_info *dhd, int ifidx);
+
+extern void dhd_event(struct dhd_info *dhd, char *evpkt, int evlen, int ifidx);
+extern void dhd_vif_sendup(struct dhd_info *dhd, int ifidx, uchar *cp, int len);
+
 
 /* Send packet to dongle via data channel */
 extern int dhd_sendpkt(dhd_pub_t *dhdp, int ifidx, void *pkt);
@@ -244,6 +358,12 @@ extern int  dhd_bus_start(dhd_pub_t *dhdp);
 
 
 
+typedef enum cust_gpio_modes {
+	WLAN_RESET_ON,
+	WLAN_RESET_OFF,
+	WLAN_POWER_ON,
+	WLAN_POWER_OFF
+} cust_gpio_modes_t;
 /*
  * Insmod parameters for debug/test
  */

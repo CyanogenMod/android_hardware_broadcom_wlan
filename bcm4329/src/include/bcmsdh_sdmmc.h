@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: bcmsdh_sdmmc.h,v 13.1.2.1.8.5 2009/04/09 03:21:12 Exp $
+ * $Id: bcmsdh_sdmmc.h,v 13.1.2.1.8.7 2009/10/27 18:22:52 Exp $
  */
 
 #ifndef __BCMSDH_SDMMC_H__
@@ -117,7 +117,6 @@ extern void sdioh_sdmmc_free_irq(uint irq, sdioh_info_t *sd);
 typedef struct _BCMSDH_SDMMC_INSTANCE {
 	sdioh_info_t	*sd;
 	struct sdio_func *func[SDIOD_MAX_IOFUNCS];
-	uint32 host_claimed;
 } BCMSDH_SDMMC_INSTANCE, *PBCMSDH_SDMMC_INSTANCE;
 
 #endif /* __BCMSDH_SDMMC_H__ */

@@ -20,37 +20,14 @@
  *      Notwithstanding the above, under no circumstances may you combine this
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
- * $Id: bcmdefs.h,v 13.38.4.10.2.7.6.7 2009/05/21 06:48:31 Exp $
+ * $Id: bcmdefs.h,v 13.38.4.10.2.7.6.10 2009/07/03 08:20:51 Exp $
  */
 
 
 #ifndef	_bcmdefs_h_
 #define	_bcmdefs_h_
 
-
-
-
-
-
-
-#define bcmreclaimed 		0
-#define r2_reclaimed		0
-#define _data	_data
-#define _fn	_fn
-#define _data	_data
-#define _fn		_fn
-#define _fn	_fn
-#define BCMPREATTACHDATA(_data)	_data
-#define BCMPREATTACHFN(_fn)		_fn
-#define CONST	const
-
-
-
-#define _data	_data
-#define _fn		_fn
-#define _fn	_fn
 #define STATIC	static
-
 
 #define	SI_BUS			0	
 #define	PCI_BUS			1	

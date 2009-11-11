@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: bcmsdh_sdmmc_linux.c,v 1.1.2.5.6.7 2009/05/22 00:31:44 Exp $
+ * $Id: bcmsdh_sdmmc_linux.c,v 1.1.2.5.6.10 2009/10/14 04:32:13 Exp $
  */
 
 #include <typedefs.h>
@@ -49,6 +49,9 @@
 
 #include <bcmsdh_sdmmc.h>
 
+#include <dhd_dbg.h>
+
+
 extern void sdioh_sdmmc_devintr_off(sdioh_info_t *sd);
 extern void sdioh_sdmmc_devintr_on(sdioh_info_t *sd);
 
@@ -73,6 +76,7 @@ extern int bcmsdh_probe(struct device *dev);
 extern int bcmsdh_remove(struct device *dev);
 struct device sdmmc_dev;
 
+
 static int bcmsdh_sdmmc_probe(struct sdio_func *func,
                               const struct sdio_device_id *id)
 {
@@ -89,7 +93,7 @@ static int bcmsdh_sdmmc_probe(struct sdio_func *func,
 		if(func->device == 0x4) { /* 4318 */
 			gInstance->func[2] = NULL;
 			sd_trace(("NIC found, calling bcmsdh_probe...\n"));
-			bcmsdh_probe(&sdmmc_dev);
+			ret = bcmsdh_probe(&sdmmc_dev);
 		}
 	}
 
@@ -97,7 +101,7 @@ static int bcmsdh_sdmmc_probe(struct sdio_func *func,
 
 	if (func->num == 2) {
 		sd_trace(("F2 found, calling bcmsdh_probe...\n"));
-		bcmsdh_probe(&sdmmc_dev);
+		ret = bcmsdh_probe(&sdmmc_dev);
 	}
 
 	return ret;
@@ -165,6 +169,13 @@ sdioh_sdmmc_osfree(sdioh_info_t *sd)
 	sdos = (struct sdos_info *)sd->sdos_info;
 	MFREE(sd->osh, sdos, sizeof(struct sdos_info));
 }
+#if defined(OOB_INTR_ONLY)
+int
+sdioh_mmc_irq(int irq)
+{
+	return (MSM_GPIO_TO_INT(irq));
+}
+#endif /* defined(OOB_INTR_ONLY) */
 
 /* Interrupt enable/disable */
 SDIOH_API_RC
@@ -178,19 +189,22 @@ sdioh_interrupt_set(sdioh_info_t *sd, bool enable)
 	sdos = (struct sdos_info *)sd->sdos_info;
 	ASSERT(sdos);
 
+#if !defined(OOB_INTR_ONLY)
 	if (enable && !(sd->intr_handler && sd->intr_handler_arg)) {
 		sd_err(("%s: no handler registered, will not enable\n", __FUNCTION__));
 		return SDIOH_API_RC_FAIL;
 	}
+#endif /* !defined(OOB_INTR_ONLY) */
 
 	/* Ensure atomicity for enable/disable calls */
 	spin_lock_irqsave(&sdos->lock, flags);
 
 	sd->client_intr_enabled = enable;
-	if (enable)
+	if (enable) {
 		sdioh_sdmmc_devintr_on(sd);
-	else
+	} else {
 		sdioh_sdmmc_devintr_off(sd);
+	}
 
 	spin_unlock_irqrestore(&sdos->lock, flags);
 
@@ -233,7 +247,10 @@ int sdio_function_init(void)
 	if (!gInstance)
 		return -ENOMEM;
 
+	bzero(&sdmmc_dev, sizeof(sdmmc_dev));
 	error = sdio_register_driver(&bcmsdh_sdmmc_driver);
+
+
 	return error;
 }
 
@@ -244,6 +261,7 @@ extern int bcmsdh_remove(struct device *dev);
 void sdio_function_cleanup(void)
 {
 	sd_trace(("%s Enter\n", __FUNCTION__));
+
 
 	sdio_unregister_driver(&bcmsdh_sdmmc_driver);
 

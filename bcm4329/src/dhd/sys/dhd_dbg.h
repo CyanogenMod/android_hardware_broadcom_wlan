@@ -1,6 +1,5 @@
 /*
  * Debug/trace/assert driver definitions for Dongle Host Driver.
- * basically copied from WL driver.
  *
  * Copyright (C) 1999-2009, Broadcom Corporation
  * 

@@ -24,7 +24,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wlioctl.h,v 1.601.4.15.2.14.2.37 2009/06/22 11:24:10 Exp $
+ * $Id: wlioctl.h,v 1.601.4.15.2.14.2.53 2009/10/27 06:18:20 Exp $
  */
 
 
@@ -133,11 +133,15 @@ typedef struct wlc_ssid {
 #define WL_BSSTYPE_INDEP 0
 #define WL_BSSTYPE_ANY   2
 
+
+#define WL_SCANFLAGS_PASSIVE 0x01
+#define WL_SCANFLAGS_PROHIBITED	0x04
+
 typedef struct wl_scan_params {
 	wlc_ssid_t ssid;		
 	struct ether_addr bssid;	
 	int8 bss_type;			
-	int8 scan_type;			
+	int8 scan_type;		
 	int32 nprobes;			
 	int32 active_time;		
 	int32 passive_time;		
@@ -154,6 +158,7 @@ typedef struct wl_scan_params {
 
 #define WL_SCAN_ACTION_START      1
 #define WL_SCAN_ACTION_CONTINUE   2
+#define WL_SCAN_ACTION_ABORT      3
 
 #define ISCAN_REQ_VERSION 1
 
@@ -182,6 +187,27 @@ typedef struct wl_scan_results {
 #define WL_SCAN_RESULTS_PENDING	2
 #define WL_SCAN_RESULTS_ABORTED	3
 
+#define ESCAN_REQ_VERSION 1
+
+typedef struct wl_escan_params {
+	uint32 version;
+	uint16 action;
+	uint16 sync_id;
+	wl_scan_params_t params;
+} wl_escan_params_t;
+
+#define WL_ESCAN_PARAMS_FIXED_SIZE (OFFSETOF(wl_escan_params_t, params) + sizeof(wlc_ssid_t))
+
+typedef struct wl_escan_result {
+	uint32 buflen;
+	uint32 version;
+	uint16 sync_id;
+	uint16 bss_count;
+	wl_bss_info_t bss_info[1];
+} wl_escan_result_t;
+
+#define WL_ESCAN_RESULTS_FIXED_SIZE (sizeof(wl_escan_result_t) - sizeof(wl_bss_info_t))
+
 
 typedef struct wl_iscan_results {
 	uint32 status;
@@ -208,6 +234,7 @@ typedef struct wl_uint32_list {
 
 typedef struct wl_assoc_params {
 	struct ether_addr bssid;	
+	uint16 bssid_cnt;		
 	int32 chanspec_num;		
 	chanspec_t chanspec_list[1];	
 } wl_assoc_params_t;
@@ -321,6 +348,8 @@ typedef struct {
 #define WPA2_AUTH_PSK		0x0080	
 #define BRCM_AUTH_PSK           0x0100  
 #define BRCM_AUTH_DPT		0x0200	
+
+#define WPA_AUTH_PFN_ANY	0xffffffff	
 
 
 #define	MAXPMKID		16
@@ -762,6 +791,7 @@ typedef struct wl_ioctl {
 #define	WLC_PHY_TYPE_G		2
 #define	WLC_PHY_TYPE_N		4
 #define	WLC_PHY_TYPE_LP		5
+#define	WLC_PHY_TYPE_SSN	6
 #define	WLC_PHY_TYPE_NULL	0xf
 
 
@@ -1156,7 +1186,6 @@ typedef struct {
 	uint32	pktengrxdmcast; 
 } wl_cnt_t;
 
-
 typedef struct {
 	uint16	version;	
 	uint16	length;		
@@ -1173,6 +1202,7 @@ typedef struct {
 	uint32	rxmcs5_40M;  
 	uint32	rxmcs6_40M;  
 	uint32	rxmcs7_40M;  
+	uint32	rxmcs32_40M;  
 
 	uint32	txfrmsnt_20Mlo;  
 	uint32	txfrmsnt_20Mup;  
@@ -1180,6 +1210,14 @@ typedef struct {
 
 	uint32 rx_20ul;
 } wl_cnt_ext_t;
+
+#define	WL_RXDIV_STATS_T_VERSION	1	
+typedef struct {
+	uint16	version;	
+	uint16	length;		
+
+	uint32 rxant[4];	
+} wl_rxdiv_stats_t;
 
 #define	WL_DELTA_STATS_T_VERSION	1	
 
@@ -1291,10 +1329,12 @@ typedef struct wl_pfn {
 	int32			auth;			
 	int32			wpa_auth;		
 	int32			wsec;			
+#ifdef WLPFN_AUTO_CONNECT
 	union {
 		wl_wsec_key_t	sec_key;		
 		wsec_pmk_t	wpa_sec_key;		
 	} pfn_security;
+#endif 
 } wl_pfn_t;
 
 
@@ -1468,10 +1508,15 @@ typedef struct wl_pkteng {
 	struct ether_addr src;		
 } wl_pkteng_t;
 
+#define NUM_80211b_RATES	4
+#define NUM_80211ag_RATES	8
+#define NUM_80211n_RATES	32
+#define NUM_80211_RATES		(NUM_80211b_RATES+NUM_80211ag_RATES+NUM_80211n_RATES)
 typedef struct wl_pkteng_stats {
 	uint32 lostfrmcnt;		
 	int32 rssi;			
 	int32 snr;			
+	uint16 rxpktcnt[NUM_80211_RATES+1];
 } wl_pkteng_stats_t;
 
 #define WL_WOWL_MAGIC	(1 << 0)	

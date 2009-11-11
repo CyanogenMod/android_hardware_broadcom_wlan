@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: siutils.c,v 1.662.4.4.4.16.4.20 2009/06/25 16:07:18 Exp $
+ * $Id: siutils.c,v 1.662.4.4.4.16.4.25 2009/09/22 13:32:03 Exp $
  */
 
 #include <typedefs.h>
@@ -661,10 +661,6 @@ si_setcore(si_t *sih, uint coreid, uint coreunit)
 {
 	uint idx;
 
-	if (!sih) {
-		printk("%s: Null, %u, %u\n", __func__, coreid, coreunit);
-		return NULL;
-	}
 	idx = si_findcoreidx(sih, coreid, coreunit);
 	if (!GOODIDX(idx))
 		return (NULL);
@@ -806,6 +802,19 @@ si_iscoreup(si_t *sih)
 		ASSERT(0);
 		return FALSE;
 	}
+}
+
+void
+si_write_wrapperreg(si_t *sih, uint32 offset, uint32 val)
+{
+	/* only for 4319, no requirement for SOCI_SB */
+	if (CHIPTYPE(sih->socitype) == SOCI_AI) {
+		ai_write_wrap_reg(sih, offset, val);
+	}
+	else
+		return;
+
+	return;
 }
 
 uint
@@ -1013,7 +1022,7 @@ si_sdio_init(si_t *sih)
 {
 	si_info_t *sii = SI_INFO(sih);
 
-	if (((sih->buscoretype == PCMCIA_CORE_ID) && (sih->buscorerev >= 8)) || \
+	if (((sih->buscoretype == PCMCIA_CORE_ID) && (sih->buscorerev >= 8)) ||
 	    (sih->buscoretype == SDIOD_CORE_ID)) {
 		uint idx;
 		sdpcmd_regs_t *sdpregs;

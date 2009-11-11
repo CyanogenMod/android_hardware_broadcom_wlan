@@ -20,7 +20,7 @@
  *      Notwithstanding the above, under no circumstances may you combine this
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
- * $Id: bcmutils.h,v 13.184.4.6.2.1.18.17 2009/06/18 02:31:37 Exp $
+ * $Id: bcmutils.h,v 13.184.4.6.2.1.18.22 2009/10/28 18:25:39 Exp $
  */
 
 
@@ -123,7 +123,11 @@ struct spktq {
 
 
 
+
 struct ether_addr;
+
+extern int ether_isbcast(const void *ea);
+extern int ether_isnulladdr(const void *ea);
 
 
 

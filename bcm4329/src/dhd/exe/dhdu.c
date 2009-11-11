@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhdu.c,v 1.52.2.10.2.6.2.10 2009/06/02 21:56:22 Exp $
+ * $Id: dhdu.c,v 1.52.2.10.2.6.2.11 2009/09/25 00:32:00 Exp $
  */
 
 /* For backwards compatibility, the absense of the define 'BWL_NO_FILESYSTEM_SUPPORT'
@@ -406,6 +406,7 @@ dhd_list(void *dhd, cmd_t *garb, char **argv)
 		printf("%s\n", buf+row*80);
 
 	printf("\n");
+	free(buf);
 	return (0);
 }
 
@@ -683,7 +684,7 @@ dhd_sd_blocksize(void *dhd, cmd_t *cmd, char **argv)
 {
 	int ret;
 	int argc;
-	char *endptr;
+	char *endptr = NULL;
 	void *ptr = NULL;
 	int func, size;
 
@@ -769,7 +770,7 @@ dhd_sdreg(void *dhd, cmd_t *cmd, char **argv)
 	int ret;
 	sdreg_t sdreg;
 	uint argc;
-	char *ptr;
+	char *ptr = NULL;
 
 	UNUSED_PARAMETER(cmd);
 
@@ -991,7 +992,7 @@ static int
 dhd_idletime(void *dhd, cmd_t *cmd, char **argv)
 {
 	int32 idletime;
-	char *endptr;
+	char *endptr = NULL;
 	int err = 0;
 
 	if (argv[1]) {
@@ -1040,7 +1041,7 @@ static int
 dhd_idleclock(void *dhd, cmd_t *cmd, char **argv)
 {
 	int32 idleclock;
-	char *endptr;
+	char *endptr = NULL;
 	int err = 0;
 
 	if (argv[1]) {
@@ -1784,7 +1785,7 @@ static int
 dhd_logstamp(void *dhd, cmd_t *cmd, char **argv)
 {
 	int ret;
-	char *endptr;
+	char *endptr = NULL;
 	uint argc;
 	int valn[2] = {0, 0};
 
@@ -1821,7 +1822,7 @@ dhd_sd_reg(void *dhd, cmd_t *cmd, char **argv)
 {
 	int ret;
 	sdreg_t sdreg;
-	char *endptr;
+	char *endptr = NULL;
 	uint argc;
 	void *ptr = NULL;
 
@@ -1911,8 +1912,8 @@ static int
 dhd_do_msglevel(void *dhd, cmd_t *cmd, char **argv, dbg_msg_t *dbg_msg)
 {
 	int ret, i;
-	uint val, last_val = 0, msglevel, msglevel_add = 0, msglevel_del = 0;
-	char *endptr;
+	uint val, last_val = 0, msglevel = 0, msglevel_add = 0, msglevel_del = 0;
+	char *endptr = NULL;
 
 	if ((ret = dhd_iovar_getint(dhd, cmd->name, (int*)&msglevel)) < 0)
 		return (ret);
@@ -2024,7 +2025,7 @@ dhd_var_setint(void *dhd, cmd_t *cmd, char **argv)
 	int32 val;
 	int len;
 	char *varname;
-	char *endptr;
+	char *endptr = NULL;
 	char *p;
 
 	if (cmd->set == -1) {

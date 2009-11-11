@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_cdc.c,v 1.22.4.2.4.7.2.18 2009/06/26 07:03:26 Exp $
+ * $Id: dhd_cdc.c,v 1.22.4.2.4.7.2.30 2009/10/28 21:38:04 Exp $
  *
  * BDC is like CDC, except it includes a header for data packets to convey
  * packet priority over the bus, and flags (e.g. to indicate checksum status
@@ -41,11 +41,6 @@
 #include <dhd_bus.h>
 #include <dhd_dbg.h>
 
-#ifdef EXT_STA
-#include <siutils.h>
-#include <wlc_cfg.h>
-#include <wlc_pub.h>
-#endif /* EXT_STA */
 
 /* Packet alignment for most efficient SDIO (can change based on platform) */
 #ifndef DHD_SDALIGN
@@ -78,11 +73,8 @@ dhdcdc_msg(dhd_pub_t *dhd)
 {
 	dhd_prot_t *prot = dhd->prot;
 	int len = ltoh32(prot->msg.len) + sizeof(cdc_ioctl_t);
-	int ret;
 
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
-
-	dhd_os_wake_lock(dhd);
 
 	/* NOTE : cdc->msg.len holds the desired length of the buffer to be
 	 *        returned. Only up to CDC_MAX_MSG_SIZE of this buffer area
@@ -92,10 +84,7 @@ dhdcdc_msg(dhd_pub_t *dhd)
 		len = CDC_MAX_MSG_SIZE;
 
 	/* Send request */
-	ret = dhd_bus_txctl(dhd->bus, (uchar*)&prot->msg, len);
-
-	dhd_os_wake_unlock(dhd);
-	return ret;
+	return dhd_bus_txctl(dhd->bus, (uchar*)&prot->msg, len);
 }
 
 static int
@@ -129,7 +118,7 @@ dhdcdc_query_ioctl(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len)
 
 
 	/* Respond "bcmerror" and "bcmerrorstr" with local cache */
-	if (cmd == WLC_GET_VAR)
+	if (cmd == WLC_GET_VAR && buf)
 	{
 		if (!strcmp((char *)buf, "bcmerrorstr"))
 		{
@@ -152,7 +141,7 @@ dhdcdc_query_ioctl(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len)
 	CDC_SET_IF_IDX(msg, ifidx);
 
 	if (buf)
-		memcpy((void *)(&msg[1]), buf, len);
+		memcpy(prot->buf, buf, len);
 
 	if ((ret = dhdcdc_msg(dhd)) < 0) {
 		DHD_ERROR(("dhdcdc_query_ioctl: dhdcdc_msg failed w/status %d\n", ret));
@@ -219,7 +208,7 @@ dhdcdc_set_ioctl(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len)
 	CDC_SET_IF_IDX(msg, ifidx);
 
 	if (buf)
-		memcpy((void *)(&msg[1]), buf, len);
+		memcpy(prot->buf, buf, len);
 
 	if ((ret = dhdcdc_msg(dhd)) < 0)
 		goto done;
@@ -256,6 +245,10 @@ dhd_prot_ioctl(dhd_pub_t *dhd, int ifidx, wl_ioctl_t * ioc, void * buf, int len)
 	dhd_prot_t *prot = dhd->prot;
 	int ret = -1;
 
+	if (dhd->busstate == DHD_BUS_DOWN) {
+		DHD_ERROR(("%s : bus is down. we have nothing to do\n", __FUNCTION__));
+		return ret;
+	}
 	dhd_os_proto_block(dhd);
 
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
@@ -361,11 +354,6 @@ dhd_prot_hdrpush(dhd_pub_t *dhd, int ifidx, void *pktbuf)
 	if (PKTSUMNEEDED(pktbuf))
 		h->flags |= BDC_FLAG_SUM_NEEDED;
 
-#ifdef EXT_STA
-	/* save pkt encryption exemption info for dongle */
-	h->flags &= ~BDC_FLAG_EXEMPT;
-	h->flags |= (WLPKTFLAG_EXEMPT_GET(WLPKTTAG(pktbuf)) & BDC_FLAG_EXEMPT);
-#endif /* EXT_STA */
 
 	h->priority = (PKTPRIO(pktbuf) & BDC_PRIORITY_MASK);
 	h->flags2 = 0;
@@ -461,10 +449,17 @@ dhd_prot_attach(dhd_pub_t *dhd)
 {
 	dhd_prot_t *cdc;
 
+#ifndef DHD_USE_STATIC_BUF
 	if (!(cdc = (dhd_prot_t *)MALLOC(dhd->osh, sizeof(dhd_prot_t)))) {
 		DHD_ERROR(("%s: kmalloc failed\n", __FUNCTION__));
 		goto fail;
 	}
+#else
+	if (!(cdc = (dhd_prot_t *)dhd_os_prealloc(DHD_PREALLOC_PROT, sizeof(dhd_prot_t)))) {
+		DHD_ERROR(("%s: kmalloc failed\n", __FUNCTION__));
+		goto fail;
+	}
+#endif /* DHD_USE_STATIC_BUF */
 	memset(cdc, 0, sizeof(dhd_prot_t));
 
 	/* ensure that the msg buf directly follows the cdc msg struct */
@@ -481,8 +476,10 @@ dhd_prot_attach(dhd_pub_t *dhd)
 	return 0;
 
 fail:
+#ifndef DHD_USE_STATIC_BUF
 	if (cdc != NULL)
 		MFREE(dhd->osh, cdc, sizeof(dhd_prot_t));
+#endif
 	return BCME_NOMEM;
 }
 
@@ -490,7 +487,9 @@ fail:
 void
 dhd_prot_detach(dhd_pub_t *dhd)
 {
+#ifndef DHD_USE_STATIC_BUF
 	MFREE(dhd->osh, dhd->prot, sizeof(dhd_prot_t));
+#endif
 	dhd->prot = NULL;
 }
 
@@ -507,17 +506,120 @@ dhd_prot_dstats(dhd_pub_t *dhd)
 	return;
 }
 
+int dhd_set_suspend(int value, dhd_pub_t *dhd)
+{
+	int power_mode = PM_MAX;
+	wl_pkt_filter_enable_t	enable_parm;
+	char iovbuf[32];
+	int bcn_li_dtim = 3;
+#ifdef CUSTOMER_HW2
+	uint roamvar = 1;
+#endif /* CUSTOMER_HW2 */
+
+#define htod32(i) i
+
+	if (dhd && dhd->up) {
+		if (value) {
+			dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM,
+				(char *)&power_mode, sizeof(power_mode));
+			/* Enable packet filter, only allow unicast packet to send up */
+			enable_parm.id = htod32(100);
+			enable_parm.enable = htod32(1);
+			bcm_mkiovar("pkt_filter_enable", (char *)&enable_parm,
+				sizeof(wl_pkt_filter_enable_t), iovbuf, sizeof(iovbuf));
+			dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+			/* set bcn_li_dtim */
+			bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
+				4, iovbuf, sizeof(iovbuf));
+			dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+#ifdef CUSTOMER_HW2
+			/* Disable build-in roaming to allowed ext supplicant to take of romaing */
+			bcm_mkiovar("roam_off", (char *)&roamvar, 4, iovbuf, sizeof(iovbuf));
+			dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+#endif /* CUSTOMER_HW2 */
+		} else {
+			power_mode = PM_FAST;
+			dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM, (char *)&power_mode,
+				sizeof(power_mode));
+			/* disable pkt filter */
+			enable_parm.id = htod32(100);
+			enable_parm.enable = htod32(0);
+			bcm_mkiovar("pkt_filter_enable", (char *)&enable_parm,
+				sizeof(wl_pkt_filter_enable_t), iovbuf, sizeof(iovbuf));
+			dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+			/* set bcn_li_dtim */
+			bcn_li_dtim = 0;
+			bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
+				4, iovbuf, sizeof(iovbuf));
+			dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+#ifdef CUSTOMER_HW2
+			roamvar = 0;
+			bcm_mkiovar("roam_off", (char *)&roamvar, 4, iovbuf, sizeof(iovbuf));
+			dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+#endif /* CUSTOMER_HW2 */
+		}
+	}
+
+	return 0;
+}
+
+#define strtoul(nptr, endptr, base) bcm_strtoul((nptr), (endptr), (base))
+
+/* Convert user's input in hex pattern to byte-size mask */
+static int
+wl_pattern_atoh(char *src, char *dst)
+{
+	int i;
+	if (strncmp(src, "0x", 2) != 0 &&
+	    strncmp(src, "0X", 2) != 0) {
+		printf("Mask invalid format. Needs to start with 0x\n");
+		return -1;
+	}
+	src = src + 2; /* Skip past 0x */
+	if (strlen(src) % 2 != 0) {
+		printf("Mask invalid format. Needs to be of even length\n");
+		return -1;
+	}
+	for (i = 0; *src != '\0'; i++) {
+		char num[3];
+		strncpy(num, src, 2);
+		num[2] = '\0';
+		dst[i] = (uint8)strtoul(num, NULL, 16);
+		src += 2;
+	}
+	return i;
+}
+
 int
 dhd_preinit_ioctls(dhd_pub_t *dhd)
 {
 	char eventmask[WL_EVENTING_MASK_LEN];
 	char iovbuf[WL_EVENTING_MASK_LEN + 12];	/*  Room for "event_msgs" + '\0' + bitvec  */
-
+	int ret;
 	uint up = 0;
+#ifdef CUSTOMER_HW2
+	uint roamvar = 0;
+#else
 	uint roamvar = 1;
+#endif
 	uint power_mode = PM_FAST;
 	uint32 dongle_align = DHD_SDALIGN;
-	int ret;
+	uint32 glom = 0;
+
+	uint bcn_timeout = 3;
+	int arpoe = 1;
+	int arp_ol = 0xf;
+	int scan_assoc_time = 40;
+	int scan_unassoc_time = 80;
+	const char 				*str;
+	wl_pkt_filter_t		pkt_filter;
+	wl_pkt_filter_t		*pkt_filterp;
+	int						buf_len;
+	int						str_len;
+	uint32					mask_size;
+	uint32					pattern_size;
+	char buf[256];
+	uint filter_mode = 1;
 
 	/* Get the device MAC address */
 	strcpy(iovbuf, "cur_etheraddr");
@@ -542,19 +644,27 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	bcm_mkiovar("bus:txglomalign", (char *)&dongle_align, 4, iovbuf, sizeof(iovbuf));
 	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
 
-	/* Force STA UP */
-	dhdcdc_set_ioctl(dhd, 0, WLC_UP, (char *)&up, sizeof(up));
+	/* disable glom option per default */
+	bcm_mkiovar("bus:txglom", (char *)&glom, 4, iovbuf, sizeof(iovbuf));
+	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+	/* Setup timeout if Beacons are lost and roam is off to report link down */
+	if (roamvar) {
+		bcm_mkiovar("bcn_timeout", (char *)&bcn_timeout, 4, iovbuf, sizeof(iovbuf));
+		dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+	}
 
-	/* Disable build-in roaming to allowed ext supplicant to take of romaing */
+	/* Enable/Disable build-in roaming to allowed ext supplicant to take of romaing */
 	bcm_mkiovar("roam_off", (char *)&roamvar, 4, iovbuf, sizeof(iovbuf));
 	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+
+	/* Force STA UP */
+	dhdcdc_set_ioctl(dhd, 0, WLC_UP, (char *)&up, sizeof(up));
 
 	/* Setup event_msgs */
 	bcm_mkiovar("event_msgs", eventmask, WL_EVENTING_MASK_LEN, iovbuf, sizeof(iovbuf));
 	dhdcdc_query_ioctl(dhd, 0, WLC_GET_VAR, iovbuf, sizeof(iovbuf));
 	bcopy(iovbuf, eventmask, WL_EVENTING_MASK_LEN);
 
-	/* Setup event_msgs */
 	setbit(eventmask, WLC_E_SET_SSID);
 	setbit(eventmask, WLC_E_PRUNE);
 	setbit(eventmask, WLC_E_AUTH);
@@ -576,6 +686,69 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 
 	bcm_mkiovar("event_msgs", eventmask, WL_EVENTING_MASK_LEN, iovbuf, sizeof(iovbuf));
 	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+
+	dhdcdc_set_ioctl(dhd, 0, WLC_SET_SCAN_CHANNEL_TIME, (char *)&scan_assoc_time,
+		sizeof(scan_assoc_time));
+	dhdcdc_set_ioctl(dhd, 0, WLC_SET_SCAN_UNASSOC_TIME, (char *)&scan_unassoc_time,
+		sizeof(scan_unassoc_time));
+
+	/* Set ARP offload */
+	bcm_mkiovar("arpoe", (char *)&arpoe, 4, iovbuf, sizeof(iovbuf));
+	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+	bcm_mkiovar("arp_ol", (char *)&arp_ol, 4, iovbuf, sizeof(iovbuf));
+	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+
+	/* add a default packet filter pattern */
+	str = "pkt_filter_add";
+	str_len = strlen(str);
+	strncpy(buf, str, str_len);
+	buf[ str_len ] = '\0';
+	buf_len = str_len + 1;
+
+	pkt_filterp = (wl_pkt_filter_t *) (buf + str_len + 1);
+
+	/* Parse packet filter id. */
+	pkt_filter.id = htod32(100);
+
+	/* Parse filter polarity. */
+	pkt_filter.negate_match = htod32(0);
+
+	/* Parse filter type. */
+	pkt_filter.type = htod32(0);
+
+	/* Parse pattern filter offset. */
+	pkt_filter.u.pattern.offset = htod32(0);
+
+	/* Parse pattern filter mask. */
+	mask_size =	htod32(wl_pattern_atoh("0xff",
+		(char *) pkt_filterp->u.pattern.mask_and_pattern));
+
+	/* Parse pattern filter pattern. */
+	pattern_size = htod32(wl_pattern_atoh("0x00",
+		(char *) &pkt_filterp->u.pattern.mask_and_pattern[mask_size]));
+
+	if (mask_size != pattern_size) {
+		printk("Mask and pattern not the same size\n");
+		return -1;
+	}
+
+	pkt_filter.u.pattern.size_bytes = mask_size;
+	buf_len += WL_PKT_FILTER_FIXED_LEN;
+	buf_len += (WL_PKT_FILTER_PATTERN_FIXED_LEN + 2 * mask_size);
+
+	/* Keep-alive attributes are set in local	variable (keep_alive_pkt), and
+	** then memcpy'ed into buffer (keep_alive_pktp) since there is no
+	** guarantee that the buffer is properly aligned.
+	*/
+	memcpy((char *)pkt_filterp, &pkt_filter,
+		WL_PKT_FILTER_FIXED_LEN + WL_PKT_FILTER_PATTERN_FIXED_LEN);
+
+	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, buf, buf_len);
+
+	/* set mode to allow pattern */
+	bcm_mkiovar("pkt_filter_mode", (char *)&filter_mode, 4, iovbuf, sizeof(iovbuf));
+	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+
 	return 0;
 }
 
@@ -583,13 +756,8 @@ int
 dhd_prot_init(dhd_pub_t *dhd)
 {
 	int ret = 0;
-	char buf[128];
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
 
-	/* Get the device MAC address */
-	strcpy(buf, "cur_etheraddr");
-	dhdcdc_query_ioctl(dhd, 0, WLC_GET_VAR, buf, sizeof(buf));
-	memcpy(dhd->mac.octet, buf, ETHER_ADDR_LEN);
 
 	ret = dhd_preinit_ioctls(dhd);
 

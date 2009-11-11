@@ -20,7 +20,7 @@
  *      Notwithstanding the above, under no circumstances may you combine this
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
- * $Id: bcmutils.c,v 1.210.4.5.2.4.6.9 2009/05/22 20:49:24 Exp $
+ * $Id: bcmutils.c,v 1.210.4.5.2.4.6.16 2009/10/28 18:25:42 Exp $
  */
 
 #include <typedefs.h>
@@ -44,6 +44,7 @@
 
 
 #ifdef BCMDRIVER
+
 
 /* copy a pkt buffer chain into a buffer */
 uint
@@ -665,7 +666,8 @@ bcmstrncat(char *dest, const char *src, uint size)
 * Returns:  Pointer to the next token found. NULL when no more tokens are found.
 *****************************************************************************
 */
-char* bcmstrtok(char **string, const char *delimiters, char *tokdelim)
+char *
+bcmstrtok(char **string, const char *delimiters, char *tokdelim)
 {
 	unsigned char *str;
 	unsigned long map[8];
@@ -742,7 +744,8 @@ char* bcmstrtok(char **string, const char *delimiters, char *tokdelim)
 *             t1 > t2, when ignoring case sensitivity.
 *****************************************************************************
 */
-int bcmstricmp(const char *s1, const char *s2)
+int
+bcmstricmp(const char *s1, const char *s2)
 {
 	char dc, sc;
 
@@ -775,7 +778,8 @@ int bcmstricmp(const char *s1, const char *s2)
 *             t1 > t2, when ignoring case sensitivity.
 *****************************************************************************
 */
-int bcmstrnicmp(const char* s1, const char* s2, int cnt)
+int
+bcmstrnicmp(const char* s1, const char* s2, int cnt)
 {
 	char dc, sc;
 
@@ -810,18 +814,14 @@ bcm_ether_atoe(char *p, struct ether_addr *ea)
 	return (i == 6);
 }
 
+
 #if defined(CONFIG_USBRNDIS_RETAIL) || defined(NDIS_MINIPORT_DRIVER)
 /* registry routine buffer preparation utility functions:
  * parameter order is like strncpy, but returns count
  * of bytes copied. Minimum bytes copied is null char(1)/wchar(2)
  */
 ulong
-wchar2ascii(
-	char *abuf,
-	ushort *wbuf,
-	ushort wbuflen,
-	ulong abuflen
-)
+wchar2ascii(char *abuf, ushort *wbuf, ushort wbuflen, ulong abuflen)
 {
 	ulong copyct = 1;
 	ushort i;

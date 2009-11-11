@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: linux_osl.c,v 1.125.12.3.8.2 2009/06/18 02:31:41 Exp $
+ * $Id: linux_osl.c,v 1.125.12.3.8.5 2009/10/27 04:43:04 Exp $
  */
 
 
@@ -41,6 +41,28 @@
 #define OS_HANDLE_MAGIC		0x1234abcd	
 #define BCM_MEM_FILENAME_LEN 	24		
 
+#ifdef DHD_USE_STATIC_BUF
+#define MAX_STATIC_BUF_NUM 16
+#define STATIC_BUF_SIZE	(PAGE_SIZE*2)
+#define STATIC_BUF_TOTAL_LEN (MAX_STATIC_BUF_NUM*STATIC_BUF_SIZE)
+typedef struct bcm_static_buf {
+	struct semaphore static_sem;
+	unsigned char *buf_ptr;
+	unsigned char buf_use[MAX_STATIC_BUF_NUM];
+} bcm_static_buf_t;
+
+static bcm_static_buf_t *bcm_static_buf = 0;
+
+#define MAX_STATIC_PKT_NUM 8
+typedef struct bcm_static_pkt {
+	struct sk_buff *skb_4k[MAX_STATIC_PKT_NUM];
+	struct sk_buff *skb_8k[MAX_STATIC_PKT_NUM];
+	struct semaphore osl_pkt_sem;
+	unsigned char pkt_use[MAX_STATIC_PKT_NUM*2];
+} bcm_static_pkt_t;
+static bcm_static_pkt_t *bcm_static_skb = 0;
+
+#endif 
 typedef struct bcm_mem_link {
 	struct bcm_mem_link *prev;
 	struct bcm_mem_link *next;
@@ -121,6 +143,7 @@ osl_error(int bcmerror)
 	return linuxbcmerrormap[-bcmerror];
 }
 
+void * dhd_os_prealloc(int section, unsigned long size);
 osl_t *
 osl_attach(void *pdev, uint bustype, bool pkttag)
 {
@@ -159,6 +182,39 @@ osl_attach(void *pdev, uint bustype, bool pkttag)
 			break;
 	}
 
+#ifdef DHD_USE_STATIC_BUF
+
+
+	if (!bcm_static_buf) {
+		if (!(bcm_static_buf = (bcm_static_buf_t *)dhd_os_prealloc(3, STATIC_BUF_SIZE+
+			STATIC_BUF_TOTAL_LEN))) {
+			printk("can not alloc static buf!\n");
+		}
+		else
+			printk("alloc static buf at %x!\n", (unsigned int)bcm_static_buf);
+
+		
+		init_MUTEX(&bcm_static_buf->static_sem);
+
+		
+		bcm_static_buf->buf_ptr = (unsigned char *)bcm_static_buf + STATIC_BUF_SIZE;
+
+	}
+	
+	if (!bcm_static_skb)
+	{
+		int i;
+		void *skb_buff_ptr = 0;
+		bcm_static_skb = (bcm_static_pkt_t *)((char *)bcm_static_buf + 2048);
+		skb_buff_ptr = dhd_os_prealloc(4, 0);
+
+		bcopy(skb_buff_ptr, bcm_static_skb, sizeof(struct sk_buff *)*16);
+		for (i = 0; i < MAX_STATIC_PKT_NUM*2; i++)
+			bcm_static_skb->pkt_use[i] = 0;
+
+		init_MUTEX(&bcm_static_skb->osl_pkt_sem);
+	}
+#endif 
 	return osh;
 }
 
@@ -168,6 +224,14 @@ osl_detach(osl_t *osh)
 	if (osh == NULL)
 		return;
 
+#ifdef DHD_USE_STATIC_BUF
+	if (bcm_static_buf) {
+		bcm_static_buf = 0;
+	}
+	if (bcm_static_skb) {
+		bcm_static_skb = 0;
+	}
+#endif 
 	ASSERT(osh->magic == OS_HANDLE_MAGIC);
 	kfree(osh);
 }
@@ -220,6 +284,90 @@ osl_pktfree(osl_t *osh, void *p, bool send)
 	}
 }
 
+#ifdef DHD_USE_STATIC_BUF
+void*
+osl_pktget_static(osl_t *osh, uint len)
+{
+	int i = 0;
+	struct sk_buff *skb;
+
+	
+	if (len > (PAGE_SIZE*2))
+	{
+		printk("Do we really need this big skb??\n");
+		return osl_pktget(osh, len);
+	}
+
+	
+	down(&bcm_static_skb->osl_pkt_sem);
+	if (len <= PAGE_SIZE)
+	{
+		
+		for (i = 0; i < MAX_STATIC_PKT_NUM; i++)
+		{
+			if (bcm_static_skb->pkt_use[i] == 0)
+				break;
+		}
+
+		if (i != MAX_STATIC_PKT_NUM)
+		{
+			bcm_static_skb->pkt_use[i] = 1;
+			up(&bcm_static_skb->osl_pkt_sem);
+
+			skb = bcm_static_skb->skb_4k[i];
+			skb->tail = skb->data + len;
+			skb->len = len;
+			
+			return skb;
+		}
+	}
+
+	
+	for (i = 0; i < MAX_STATIC_PKT_NUM; i++)
+	{
+		if (bcm_static_skb->pkt_use[i+MAX_STATIC_PKT_NUM] == 0)
+			break;
+	}
+
+	if (i != MAX_STATIC_PKT_NUM)
+	{
+		bcm_static_skb->pkt_use[i+MAX_STATIC_PKT_NUM] = 1;
+		up(&bcm_static_skb->osl_pkt_sem);
+		skb = bcm_static_skb->skb_8k[i];
+		skb->tail = skb->data + len;
+		skb->len = len;
+		
+		return skb;
+	}
+
+
+	
+	up(&bcm_static_skb->osl_pkt_sem);
+	printk("all static pkt in use!\n");
+	return osl_pktget(osh, len);
+}
+
+
+void
+osl_pktfree_static(osl_t *osh, void *p, bool send)
+{
+	int i;
+	
+	for (i = 0; i < MAX_STATIC_PKT_NUM*2; i++)
+	{
+		if (p == bcm_static_skb->skb_4k[i])
+		{
+			down(&bcm_static_skb->osl_pkt_sem);
+			bcm_static_skb->pkt_use[i] = 0;
+			up(&bcm_static_skb->osl_pkt_sem);
+
+			
+			return;
+		}
+	}
+	return osl_pktfree(osh, p, send);
+}
+#endif 
 uint32
 osl_pci_read_config(osl_t *osh, uint offset, uint size)
 {
@@ -307,6 +455,40 @@ osl_malloc(osl_t *osh, uint size)
 	if (osh)
 		ASSERT(osh->magic == OS_HANDLE_MAGIC);
 
+#ifdef DHD_USE_STATIC_BUF
+	if (bcm_static_buf)
+	{
+		int i = 0;
+		if ((size >= PAGE_SIZE)&&(size <= STATIC_BUF_SIZE))
+		{
+			down(&bcm_static_buf->static_sem);
+			
+			for (i = 0; i < MAX_STATIC_BUF_NUM; i++)
+			{
+				if (bcm_static_buf->buf_use[i] == 0)
+					break;
+			}
+			
+			if (i == MAX_STATIC_BUF_NUM)
+			{
+				up(&bcm_static_buf->static_sem);
+				printk("all static buff in use!\n");
+				goto original;
+			}
+			
+			bcm_static_buf->buf_use[i] = 1;
+			up(&bcm_static_buf->static_sem);
+
+			bzero(bcm_static_buf->buf_ptr+STATIC_BUF_SIZE*i, size);
+			if (osh)
+				osh->malloced += size;
+
+			return ((void *)(bcm_static_buf->buf_ptr+STATIC_BUF_SIZE*i));
+		}
+	}
+original:
+#endif 
+
 	if ((addr = kmalloc(size, GFP_ATOMIC)) == NULL) {
 		if (osh)
 			osh->failed++;
@@ -321,6 +503,28 @@ osl_malloc(osl_t *osh, uint size)
 void
 osl_mfree(osl_t *osh, void *addr, uint size)
 {
+#ifdef DHD_USE_STATIC_BUF
+	if (bcm_static_buf)
+	{
+		if ((addr > (void *)bcm_static_buf) && ((unsigned char *)addr \
+			<= ((unsigned char *)bcm_static_buf + STATIC_BUF_TOTAL_LEN)))
+		{
+			int buf_idx = 0;
+			
+			buf_idx = ((unsigned char *)addr - bcm_static_buf->buf_ptr)/STATIC_BUF_SIZE;
+			
+			down(&bcm_static_buf->static_sem);
+			bcm_static_buf->buf_use[buf_idx] = 0;
+			up(&bcm_static_buf->static_sem);
+
+			if (osh) {
+				ASSERT(osh->magic == OS_HANDLE_MAGIC);
+				osh->malloced -= size;
+			}
+			return;
+		}
+	}
+#endif 
 	if (osh) {
 		ASSERT(osh->magic == OS_HANDLE_MAGIC);
 		osh->malloced -= size;

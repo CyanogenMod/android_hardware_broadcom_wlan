@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: ethernet.h,v 9.45.56.1 2008/11/20 00:51:28 Exp $
+ * $Id: ethernet.h,v 9.45.56.3 2009/08/15 00:51:27 Exp $
  */
 
 
@@ -124,23 +124,21 @@ BWL_PRE_PACKED_STRUCT struct	ether_addr {
 		((short*)d)[2] = ((short*)s)[2]; }
 
 
-#define ETHER_ISBCAST(ea) ((((uint8 *)(ea))[0] &		\
-			    ((uint8 *)(ea))[1] &		\
-			    ((uint8 *)(ea))[2] &		\
-			    ((uint8 *)(ea))[3] &		\
-			    ((uint8 *)(ea))[4] &		\
-			    ((uint8 *)(ea))[5]) == 0xff)
-
 static const struct ether_addr ether_bcast = {{255, 255, 255, 255, 255, 255}};
 static const struct ether_addr ether_null = {{0, 0, 0, 0, 0, 0}};
 
-
-#define ETHER_ISNULLADDR(ea) ((((uint8 *)(ea))[0] |		\
-			    ((uint8 *)(ea))[1] |		\
-			    ((uint8 *)(ea))[2] |		\
-			    ((uint8 *)(ea))[3] |		\
-			    ((uint8 *)(ea))[4] |		\
-			    ((uint8 *)(ea))[5]) == 0)
+#define ETHER_ISBCAST(ea)	((((uint8 *)(ea))[0] &		\
+	                          ((uint8 *)(ea))[1] &		\
+				  ((uint8 *)(ea))[2] &		\
+				  ((uint8 *)(ea))[3] &		\
+				  ((uint8 *)(ea))[4] &		\
+				  ((uint8 *)(ea))[5]) == 0xff)
+#define ETHER_ISNULLADDR(ea)	((((uint8 *)(ea))[0] |		\
+				  ((uint8 *)(ea))[1] |		\
+				  ((uint8 *)(ea))[2] |		\
+				  ((uint8 *)(ea))[3] |		\
+				  ((uint8 *)(ea))[4] |		\
+				  ((uint8 *)(ea))[5]) == 0)
 
 
 

@@ -49,7 +49,7 @@ CFLAGS += -DBCMSPI
 #-----------------------------------------------------------
 # Linux build
 #
-ifneq ($(findstring $(TARGETENV), "linux linuxmips linuxmips_be linuxarm linuxarm_le linuxarm_omap android"),)
+ifneq ($(findstring $(TARGETENV), "linux linuxmips linuxmips_be linuxarm linuxarm_le android"),)
 
 # $(TARGETARCH) is set based on TARGETENV in src/Makerules.* files
 DHD_OBJS := dhdu.o dhdu_linux.o bcmutils.o miniopt.o
@@ -62,10 +62,6 @@ endif
 
 # extra warnings
 CFLAGS += -Wextra $(CUSTOM_FLAGS)
-
-ifeq ($(TARGETENV), linuxarm_omap)
-CFLAGS += -DBGBRD
-endif
 
 vpath %.c $(SRCBASE)/shared
 

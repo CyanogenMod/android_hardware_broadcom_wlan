@@ -21,7 +21,7 @@
 # software in any way with any other Broadcom software provided under a license
 # other than the GPL, without Broadcom's express prior written consent.
 #
-# $Id: Makefile,v 1.55.2.6.2.10.6.18 2009/06/03 21:51:11 Exp $
+# $Id: Makefile,v 1.55.2.6.2.10.6.24 2009/10/22 18:40:45 Exp $
 #
 
 # Try a couple of places for LINUXDIR if not specified
@@ -54,6 +54,9 @@ ifeq ($(LINUXVER),)
      $(error LINUXVER=$(LINUXVER) is empty)
 endif # LINUXVER
 
+$(warning Found LINUXVER=$(LINUXVER))
+$(warning Found LINUXDIR=$(LINUXDIR))
+
 # check if 2.4 kernel or 2.5+ kernel
 BCM_KVER:=$(shell echo $(LINUXVER) | cut -c1-3 | sed 's/2\.[56]/2\.6/')
 
@@ -74,7 +77,7 @@ DFLAGS :=
 
 
 # basic options (defines in DFLAGS, includes in IFLAGS)
-DFLAGS += -DLINUX -DSRCBASE=\"$(SRCBASE)\" -DBCMDRIVER -DBCMDONGLEHOST -DDHDTHREAD -DBCMWPA2
+DFLAGS += -DLINUX -DSRCBASE=\"$(SRCBASE)\" -DBCMDRIVER -DBCMDONGLEHOST -DDHDTHREAD -DBCMWPA2 -DBCMWAPI_WPI
 DFLAGS += -DUNRELEASEDCHIP
 ifeq ($(BCMQT),1)
 	DFLAGS += -DBCMSLTGT -DBCMQT
@@ -85,7 +88,40 @@ ifeq ($(WLTEST),1)
 endif
 
 
-IFLAGS := -I$(LINUXDIR)/include -I$(LINUXDIR)/include/asm/mach-default -I. -I$(SRCBASE)/include -I$(SRCBASE)/shared -I$(SRCBASE)/dhd/sys -I$(SRCBASE)/dongle -I$(SRCBASE)/wl/sys
+# Past 2.6.29 kernels, arch specific bits are re-organized in linux kernel. So
+# append new include paths to existing ones to get 2.6.29+ kernels compile
+
+# Default DHDARCH is x86
+ifdef ARCH
+   DHDARCH ?= $(ARCH)
+else
+   DHDARCH ?= x86
+endif
+
+ifneq ($(findstring native,$(TARGET)),)
+   DHDARCH = x86
+endif
+ifneq ($(findstring mips,$(TARGET)),)
+   DHDARCH = mips
+endif
+ifneq ($(findstring arm,$(TARGET)),)
+   DHDARCH = arm
+endif
+
+# First include from linux kernel dirs
+IFLAGS := -I$(LINUXDIR)/include 
+IFLAGS += -I$(LINUXDIR)/include/asm/mach-default 
+# Followed by 2.6.29+ specific paths
+IFLAGS += -I$(LINUXDIR)/arch/$(DHDARCH)/include
+IFLAGS += -I$(LINUXDIR)/arch/$(DHDARCH)/include/asm/mach-default
+
+# From current workspace
+IFLAGS += -I. 
+IFLAGS += -I$(SRCBASE)/include 
+IFLAGS += -I$(SRCBASE)/shared 
+IFLAGS += -I$(SRCBASE)/dhd/sys 
+IFLAGS += -I$(SRCBASE)/dongle 
+IFLAGS += -I$(SRCBASE)/wl/sys
 
 ifneq ($(wildcard $(LINUXDIR)/.config),)
 include $(LINUXDIR)/.config
@@ -162,7 +198,7 @@ ifneq ($(findstring -rndis-,-$(TARGET)-),)
 DFLAGS += -DRNDIS
 CFILES += dhd_rndis.c
 endif
-  
+		  
 ifneq ($(findstring -usb-,-$(TARGET)-),)
 DFLAGS += -DBCMDHDUSB
 CFILES += dhd_usb_linux.c
@@ -175,8 +211,15 @@ ifneq ($(findstring -sdstd-,$(TARGET)-),)
 DFLAGS += -DBCMSDIO -DBCMSDIOH_STD
 CFILES += dhd_sdio.c bcmsdh.c bcmsdstd.c bcmsdstd_linux.c bcmsdh_linux.c
 endif
+ifneq ($(findstring -oob-,-$(TARGET)-),)
+DFLAGS += -DOOB_INTR_ONLY
+else
 ifneq ($(findstring -sdmmc-,-$(TARGET)-),)
-DFLAGS += -DBCMSDIO -DDHD_GPL -DBCMLXSDMMC -DBCMPLATFORM_BUS -DSDIO_ISR_THREAD
+DFLAGS += -DSDIO_ISR_THREAD
+endif
+endif
+ifneq ($(findstring -sdmmc-,-$(TARGET)-),)
+DFLAGS += -DBCMSDIO -DDHD_GPL -DBCMLXSDMMC -DBCMPLATFORM_BUS 
 CFILES += dhd_sdio.c bcmsdh_sdmmc.c bcmsdh.c bcmsdh_linux.c bcmsdh_sdmmc_linux.c
 endif
 ifneq ($(findstring -sdspi-,$(TARGET)-),)
@@ -195,6 +238,8 @@ DFLAGS += -DSANDGATE2G
 endif
 
 CFLAGS += -fshort-wchar $(DFLAGS) $(WFLAGS) $(IFLAGS) $(CUSTOM_FLAGS)
+
+
 
 LDFLAGS := -r
 MODULES := dhd.o
@@ -219,8 +264,9 @@ endif
 
 TARGETS := \
 	dhd-cdc-usb dhd-cdc-sdstd \
-	dhd-cdc-sdspi-pci dhd-cdc-sdmmc-gpl dhd-cdc-usb-apsta \
-	dhd-cdc-usb-gpl
+	dhd-cdc-sdspi-pci dhd-cdc-sdmmc-gpl dhd-cdc-sdmmc-oob-gpl \
+	dhd-cdc-usb-apsta dhd-cdc-usb-gpl \
+	dhd-cdc-sdstd-apsta
 
 
 TARGETS += \

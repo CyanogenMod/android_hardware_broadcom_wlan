@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: sdio.h,v 13.24.4.1.4.1 2008/05/06 22:57:29 Exp $
+ * $Id: sdio.h,v 13.24.4.1.4.1.16.1 2009/08/12 01:08:02 Exp $
  */
 
 #ifndef	_SDIO_H
@@ -80,6 +80,9 @@ typedef volatile struct {
 #define SDIOD_CCCR_POWER_CONTROL	0x12
 #define SDIOD_CCCR_SPEED_CONTROL	0x13
 
+/* Broadcom extensions (corerev >= 1) */
+#define SDIOD_CCCR_BRCM_SEPINT		0xf2
+
 /* cccr_sdio_rev */
 #define SDIO_REV_SDIOID_MASK	0xf0	/* SDIO spec revision number */
 #define SDIO_REV_CCCRID_MASK	0x0f	/* CCCR format version number */
@@ -134,6 +137,11 @@ typedef volatile struct {
 #define SDIO_SPEED_SHS		0x01	/* supports high-speed [clocking] mode (RO) */
 #define SDIO_SPEED_EHS		0x02	/* enable high-speed [clocking] mode (RW) */
 
+/* brcm sepint */
+#define SDIO_SEPINT_MASK	0x01	/* route sdpcmdev intr onto separate pad (chip-specific) */
+#define SDIO_SEPINT_OE		0x02	/* 1 asserts output enable for above pad */
+#define SDIO_SEPINT_ACT_HI	0x04	/* use active high interrupt level instead of active low */
+
 /* FBR structure for function 1-7, FBR addresses and register offsets */
 typedef volatile struct {
 	uint8	devctr;			/* device interface, CSA control */
@@ -162,7 +170,7 @@ typedef volatile struct {
 #define SDIOD_FBR_SIZE			0x100
 
 /* Macro to calculate FBR register base */
-#define SDIOD_FBR_BASE(n)		(n * 0x100)
+#define SDIOD_FBR_BASE(n)		((n) * 0x100)
 
 /* Function register offsets */
 #define SDIOD_FBR_DEVCTR		0x00	/* basic info for function */
@@ -282,13 +290,13 @@ typedef volatile struct {
 
 /* build SD_CMD_IO_RW_DIRECT Argument */
 #define SDIO_IO_RW_DIRECT_ARG(rw, raw, func, addr, data) \
-		(((rw & 1) << 31) | ((func & 0x7) << 28) | ((raw & 1) << 27) | \
-		 ((addr & 0x1FFFF) << 9) | (data & 0xFF))
+	((((rw) & 1) << 31) | (((func) & 0x7) << 28) | (((raw) & 1) << 27) | \
+	 (((addr) & 0x1FFFF) << 9) | ((data) & 0xFF))
 
 /* build SD_CMD_IO_RW_EXTENDED Argument */
 #define SDIO_IO_RW_EXTENDED_ARG(rw, blk, func, addr, inc_addr, count) \
-		(((rw & 1) << 31) | ((func & 0x7) << 28) | ((blk & 1) << 27) | \
-		 ((inc_addr & 1) << 26) | ((addr & 0x1FFFF) << 9) | (count & 0x1FF))
+	((((rw) & 1) << 31) | (((func) & 0x7) << 28) | (((blk) & 1) << 27) | \
+	 (((inc_addr) & 1) << 26) | (((addr) & 0x1FFFF) << 9) | ((count) & 0x1FF))
 
 /* SDIO response parameters */
 #define SD_RSP_NO_NONE			0

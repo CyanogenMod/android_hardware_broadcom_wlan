@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: siutils_priv.h,v 1.3.10.5 2008/08/06 06:28:10 Exp $
+ * $Id: siutils_priv.h,v 1.3.10.5.4.2 2009/09/22 13:28:16 Exp $
  */
 
 #ifndef	_siutils_priv_h_
@@ -207,6 +207,7 @@ extern void ai_core_disable(si_t *sih, uint32 bits);
 extern int ai_numaddrspaces(si_t *sih);
 extern uint32 ai_addrspace(si_t *sih, uint asidx);
 extern uint32 ai_addrspacesize(si_t *sih, uint asidx);
+extern void ai_write_wrap_reg(si_t *sih, uint32 offset, uint32 val);
 
 
 #endif	/* _siutils_priv_h_ */
