@@ -2158,7 +2158,7 @@ dhd_module_init(void)
 	 * It's needed to make sync up exit from dhd insmod  and
 	 * Kernel MMC sdio device callback registration
 	 */
-	if (down_timeout(&dhd_registration_sem,  msecs_to_jiffies(5000)) != 0) {
+	if (down_timeout(&dhd_registration_sem,  msecs_to_jiffies(10000)) != 0) {
 		error = -EINVAL;
 		DHD_ERROR(("%s: sdio_register_driver failed \n", __FUNCTION__));
 	}

@@ -57,7 +57,7 @@
 
 #else /* DHD_DEBUG */
 
-#define DHD_ERROR(args)
+#define DHD_ERROR(args)		printk args
 #define DHD_TRACE(args)
 #define DHD_INFO(args)
 #define DHD_DATA(args)
