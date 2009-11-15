@@ -2370,16 +2370,18 @@ wl_iw_get_scan_prep(
 
 		
 		if (bi->rateset.count) {
-			value = event + IW_EV_LCP_LEN;
-			iwe.cmd = SIOCGIWRATE;
-			
-			iwe.u.bitrate.fixed = iwe.u.bitrate.disabled = 0;
-			for (j = 0; j < bi->rateset.count && j < IW_MAX_BITRATES; j++) {
-				iwe.u.bitrate.value = (bi->rateset.rates[j] & 0x7f) * 500000;
-				value = IWE_STREAM_ADD_VALUE(info, event, value, end, &iwe,
-					IW_EV_PARAM_LEN);
+			if (((event - extra) + IW_EV_LCP_LEN) <= (int)end) { 
+				value = event + IW_EV_LCP_LEN;
+				iwe.cmd = SIOCGIWRATE;
+
+				iwe.u.bitrate.fixed = iwe.u.bitrate.disabled = 0;
+				for (j = 0; j < bi->rateset.count && j < IW_MAX_BITRATES; j++) {
+					iwe.u.bitrate.value = (bi->rateset.rates[j] & 0x7f) * 500000;
+					value = IWE_STREAM_ADD_VALUE(info, event, value, end, &iwe,
+						IW_EV_PARAM_LEN);
+				}
+				event = value;
 			}
-			event = value;
 		}
 	} 
 

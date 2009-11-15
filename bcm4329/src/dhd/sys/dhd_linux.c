@@ -2523,7 +2523,15 @@ dhd_dev_reset(struct net_device *dev, uint8 flag)
 {
 	dhd_info_t *dhd = *(dhd_info_t **)netdev_priv(dev);
 
+        /* Turning off watchdog */
+        if (flag)
+                dhd_os_wd_timer(&dhd->pub, 0);
+
 	dhd_bus_devreset(&dhd->pub, flag);
+
+        /* Turning on watchdog back */
+        if (!flag)
+                dhd_os_wd_timer(&dhd->pub, dhd_watchdog_ms);
 
 	DHD_ERROR(("%s:  WLAN OFF DONE\n", __FUNCTION__));
 
