@@ -1780,10 +1780,14 @@ _iscan_sysioc_thread(void *data)
 	uint32 status;
 	iscan_info_t *iscan = (iscan_info_t *)data;
 	static bool iscan_pass_abort = FALSE;
+
 	DAEMONIZE("iscan_sysioc");
 
 	status = WL_SCAN_RESULTS_PARTIAL;
 	while (down_interruptible(&iscan->sysioc_sem) == 0) {
+
+		net_os_wake_lock(iscan->dev);
+
 		if (iscan->timer_on) {
 			del_timer(&iscan->timer);
 			iscan->timer_on = 0;
@@ -1844,12 +1848,15 @@ _iscan_sysioc_thread(void *data)
 				WL_TRACE(("iscanresults returned unknown status %d\n", status));
 				break;
 		}
+
+		net_os_wake_unlock(iscan->dev);
 	}
 
 	if (iscan->timer_on) {
 		del_timer(&iscan->timer);
 		iscan->timer_on = 0;
 	}
+
 	complete_and_exit(&iscan->sysioc_exited, 0);
 }
 #endif 
@@ -4568,6 +4575,9 @@ _bt_dhcp_sysioc_thread(void *data)
 	DAEMONIZE("dhcp_sysioc");
 
 	while (down_interruptible(&g_bt->bt_sem) == 0) {
+
+		net_os_wake_lock(g_bt->dev);
+
 		if (g_bt->timer_on) {
 			del_timer(&g_bt->timer);
 			g_bt->timer_on = 0;
@@ -4607,12 +4617,15 @@ _bt_dhcp_sysioc_thread(void *data)
 				g_bt->timer_on = 0;
 				break;
 		 }
+
+		net_os_wake_unlock(g_bt->dev);
 	}
 
 	if (g_bt->timer_on) {
 		del_timer(&g_bt->timer);
 		g_bt->timer_on = 0;
 	}
+
 	complete_and_exit(&g_bt->bt_exited, 0);
 }
 
