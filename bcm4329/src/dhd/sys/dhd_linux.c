@@ -1890,7 +1890,7 @@ dhd_bus_start(dhd_pub_t *dhdp)
 #if defined(OOB_INTR_ONLY)
 	/* Host registration for OOB interrupt */
 	if (bcmsdh_register_oob_intr(dhdp)) {
-		del_timer(&dhd->timer);
+		del_timer_sync(&dhd->timer);
 		dhd->wd_timer_valid = FALSE;
 		DHD_ERROR(("%s Host failed to resgister for OOB\n", __FUNCTION__));
 		return -ENODEV;
@@ -1902,7 +1902,7 @@ dhd_bus_start(dhd_pub_t *dhdp)
 
 	/* If bus is not ready, can't come up */
 	if (dhd->pub.busstate != DHD_BUS_DATA) {
-		del_timer(&dhd->timer);
+		del_timer_sync(&dhd->timer);
 		dhd->wd_timer_valid = FALSE;
 		DHD_ERROR(("%s failed bus is not ready\n", __FUNCTION__));
 		return -ENODEV;
@@ -2029,7 +2029,7 @@ dhd_bus_detach(dhd_pub_t *dhdp)
 #endif /* defined(OOB_INTR_ONLY) */
 
 			/* Clear the watchdog timer */
-			del_timer(&dhd->timer);
+			del_timer_sync(&dhd->timer);
 			dhd->wd_timer_valid = FALSE;
 		}
 	}
@@ -2280,7 +2280,7 @@ dhd_os_wd_timer(void *bus, uint wdtick)
 #if defined(CONTINUOUS_WATCHDOG)
 	/* Stop timer and restart at new value */
 	if (dhd->wd_timer_valid == TRUE) {
-		del_timer(&dhd->timer);
+		del_timer_sync(&dhd->timer);
 		dhd->wd_timer_valid = FALSE;
 	}
 
@@ -2292,7 +2292,7 @@ dhd_os_wd_timer(void *bus, uint wdtick)
 #else
 	/* Totally stop the timer */
 	if (!wdtick && dhd->wd_timer_valid == TRUE) {
-		del_timer(&dhd->timer);
+		del_timer_sync(&dhd->timer);
 		dhd->wd_timer_valid = FALSE;
 		save_dhd_watchdog_ms = wdtick;
 		return;
@@ -2304,7 +2304,7 @@ dhd_os_wd_timer(void *bus, uint wdtick)
 
 			if (dhd->wd_timer_valid == TRUE)
 				/* Stop timer and restart at new value */
-				del_timer(&dhd->timer);
+				del_timer_sync(&dhd->timer);
 
 			/* Create timer again when watchdog period is
 			   dynamically changed or in the first instance

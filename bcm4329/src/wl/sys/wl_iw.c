@@ -603,7 +603,7 @@ wl_iw_set_btcoex_dhcp(
 		
 		g_bt->bt_state = BT_DHCP_START;
 		g_bt->timer_on = 1;
-		add_timer(&g_bt->timer);
+		mod_timer(&g_bt->timer, g_bt->timer.expires);
 		WL_TRACE(("%s enable BT DHCP Timer\n", __FUNCTION__));
 
 	}
@@ -618,8 +618,8 @@ wl_iw_set_btcoex_dhcp(
 		
 		WL_TRACE(("%s disable BT DHCP Timer\n", __FUNCTION__));
 		if (g_bt->timer_on) {
-			del_timer(&g_bt->timer);
 			g_bt->timer_on = 0;
+			del_timer_sync(&g_bt->timer);
 		}
 
 		
@@ -840,7 +840,7 @@ wl_iw_stop_timerfunc(ulong data)
 
 	WL_TRACE(("%s\n", __FUNCTION__));
 
-	del_timer(wl_ctl->timer);
+	del_timer_sync(wl_ctl->timer);
 
 	up(&wl_ctl->timer_sem);
 }
@@ -1789,8 +1789,8 @@ _iscan_sysioc_thread(void *data)
 		net_os_wake_lock(iscan->dev);
 
 		if (iscan->timer_on) {
-			del_timer(&iscan->timer);
 			iscan->timer_on = 0;
+			del_timer_sync(&iscan->timer);
 		}
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
@@ -1853,8 +1853,8 @@ _iscan_sysioc_thread(void *data)
 	}
 
 	if (iscan->timer_on) {
-		del_timer(&iscan->timer);
 		iscan->timer_on = 0;
+		del_timer_sync(&iscan->timer);
 	}
 
 	complete_and_exit(&iscan->sysioc_exited, 0);
@@ -1925,7 +1925,7 @@ wl_iw_run_ss_cache_timer(int kick_off)
 	}
 	else {
 		if (*timer) {
-			del_timer(*timer);
+			del_timer_sync(*timer);
 			kfree(*timer);
 			*timer = NULL;
 		}
@@ -2196,9 +2196,7 @@ wl_iw_iscan_set_scan(
 		&iscan->scan_flag, sizeof(iscan->scan_flag));
 	wl_iw_set_event_mask(dev);
 	wl_iw_iscan(iscan, &ssid, WL_SCAN_ACTION_START);
-	del_timer(&iscan->timer);
-	iscan->timer.expires = jiffies + iscan->timer_ms*HZ/1000;
-	add_timer(&iscan->timer);
+	mod_timer(&iscan->timer, jiffies + iscan->timer_ms*HZ/1000);
 	iscan->timer_on = 1;
 
 	return 0;
@@ -3854,17 +3852,16 @@ wl_iw_set_priv(
 	net_os_wake_lock(dev);
 	
 	if (dwrq->length && extra) {
+		if (strnicmp(extra, "START", strlen("START")) == 0) {
+			wl_iw_control_wl_on(dev, info);
+			WL_TRACE(("%s, Received regular START command\n", __FUNCTION__));
+		}
+
 		if (g_onoff == G_WLAN_SET_OFF) {
-			if (strnicmp(extra, "START", strlen("START")) != 0) {
-				WL_TRACE(("%s, missing START, Fail\n", __FUNCTION__));
-				kfree(extra);
-				net_os_wake_unlock(dev);
-				return -EFAULT;
-			}
-			else {
-				wl_iw_control_wl_on(dev, info);
-				WL_TRACE(("%s, Received regular START command\n", __FUNCTION__));
-			}
+			WL_TRACE(("%s, missing START, Fail\n", __FUNCTION__));
+			kfree(extra);
+			net_os_wake_unlock(dev);
+			return -EFAULT;
 		}
 
 	    if (strnicmp(extra, "SCAN-ACTIVE", strlen("SCAN-ACTIVE")) == 0) {
@@ -4579,16 +4576,15 @@ _bt_dhcp_sysioc_thread(void *data)
 		net_os_wake_lock(g_bt->dev);
 
 		if (g_bt->timer_on) {
-			del_timer(&g_bt->timer);
 			g_bt->timer_on = 0;
+			del_timer_sync(&g_bt->timer);
 		}
 
 		switch (g_bt->bt_state) {
 			case BT_DHCP_START:
 				
 				g_bt->bt_state = BT_DHCP_OPPORTUNITY_WINDOW;
-				mod_timer(&g_bt->timer, jiffies + \
-				           BT_DHCP_OPPORTUNITY_WINDOW_TIEM*HZ/1000);
+				mod_timer(&g_bt->timer, jiffies + BT_DHCP_OPPORTUNITY_WINDOW_TIEM*HZ/1000);
 				g_bt->timer_on = 1;
 				break;
 			case BT_DHCP_OPPORTUNITY_WINDOW:
@@ -4622,8 +4618,8 @@ _bt_dhcp_sysioc_thread(void *data)
 	}
 
 	if (g_bt->timer_on) {
-		del_timer(&g_bt->timer);
 		g_bt->timer_on = 0;
+		del_timer_sync(&g_bt->timer);
 	}
 
 	complete_and_exit(&g_bt->bt_exited, 0);
