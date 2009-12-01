@@ -216,7 +216,7 @@ wl_iw_get_scan_prep(
 	wl_scan_results_t *list,
 	struct iw_request_info *info,
 	char *extra,
-	__u16 max_size
+	short max_size
 );
 
 
@@ -2307,7 +2307,7 @@ wl_iw_get_scan_prep(
 	wl_scan_results_t *list,
 	struct iw_request_info *info,
 	char *extra,
-	__u16 max_size)
+	short max_size)
 {
 	int  i, j;
 	struct iw_event  iwe;
@@ -2582,10 +2582,11 @@ wl_iw_iscan_get_scan(
 	while (p_buf != iscan->list_cur) {
 	    list = &((wl_iscan_results_t*)p_buf->iscan_buf)->results;
 
-	counter += list->count;
+	    counter += list->count;
 
 	    if (list->version != WL_BSS_INFO_VERSION) {
 		WL_ERROR(("list->version %d != WL_BSS_INFO_VERSION\n", list->version));
+		return -EINVAL; /* if WL_BSS_INFO_VERSION is corrupted iscan results are garbage */
 	    }
 
 	    bi = NULL;
