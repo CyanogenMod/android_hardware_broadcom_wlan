@@ -2050,6 +2050,14 @@ dhd_detach(dhd_pub_t *dhdp)
 #if defined(CONFIG_HAS_EARLYSUSPEND)
 			unregister_early_suspend(&dhd->early_suspend);
 #endif	/* defined(CONFIG_HAS_EARLYSUSPEND) */
+#ifdef CONFIG_WIRELESS_EXT
+			/* Attach and link in the iw */
+			wl_iw_detach();
+#endif
+			if (dhd->sysioc_pid >= 0) {
+				KILL_PROC(dhd->sysioc_pid, SIGTERM);
+				wait_for_completion(&dhd->sysioc_exited);
+			}
 
 			for (i = 1; i < DHD_MAX_IFS; i++)
 				if (dhd->iflist[i])
@@ -2062,46 +2070,35 @@ dhd_detach(dhd_pub_t *dhdp)
 				unregister_netdev(ifp->net);
 			}
 
+			if (dhd->watchdog_pid >= 0)
+			{
+				KILL_PROC(dhd->watchdog_pid, SIGTERM);
+				wait_for_completion(&dhd->watchdog_exited);
+			}
 
-		if (dhd->watchdog_pid >= 0)
-		{
-			KILL_PROC(dhd->watchdog_pid, SIGTERM);
-			wait_for_completion(&dhd->watchdog_exited);
-		}
+			if (dhd->dpc_pid >= 0)
+			{
+				KILL_PROC(dhd->dpc_pid, SIGTERM);
+				wait_for_completion(&dhd->dpc_exited);
+			}
+			else
+				tasklet_kill(&dhd->tasklet);
 
-		if (dhd->dpc_pid >= 0)
-		{
-			KILL_PROC(dhd->dpc_pid, SIGTERM);
-			wait_for_completion(&dhd->dpc_exited);
-		}
-		else
-		tasklet_kill(&dhd->tasklet);
+			dhd_bus_detach(dhdp);
 
-		if (dhd->sysioc_pid >= 0) {
-			KILL_PROC(dhd->sysioc_pid, SIGTERM);
-			wait_for_completion(&dhd->sysioc_exited);
-		}
-
-		dhd_bus_detach(dhdp);
-
-		if (dhdp->prot)
-			dhd_prot_detach(dhdp);
-
-#ifdef CONFIG_WIRELESS_EXT
-		/* Attach and link in the iw */
-		wl_iw_detach();
-#endif
+			if (dhdp->prot)
+				dhd_prot_detach(dhdp);
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_PM_SLEEP)
-		unregister_pm_notifier(&dhd_sleep_pm_notifier);
+			unregister_pm_notifier(&dhd_sleep_pm_notifier);
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_PM_SLEEP) */
-		free_netdev(ifp->net);
+			free_netdev(ifp->net);
 #ifdef CONFIG_HAS_WAKELOCK
-		wake_lock_destroy(&dhd->wl_wifi);
-		wake_lock_destroy(&dhd->wl_rxwake);
+			wake_lock_destroy(&dhd->wl_wifi);
+			wake_lock_destroy(&dhd->wl_rxwake);
 #endif
-		MFREE(dhd->pub.osh, ifp, sizeof(*ifp));
-		MFREE(dhd->pub.osh, dhd, sizeof(*dhd));
+			MFREE(dhd->pub.osh, ifp, sizeof(*ifp));
+			MFREE(dhd->pub.osh, dhd, sizeof(*dhd));
 		}
 	}
 }
