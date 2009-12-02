@@ -1173,8 +1173,7 @@ dhd_watchdog(ulong data)
 
 	/* Reschedule the watchdog */
 #if defined(CONTINUOUS_WATCHDOG)
-	dhd->timer.expires = jiffies + dhd_watchdog_ms * HZ / 1000;
-	add_timer(&dhd->timer);
+	mod_timer(&dhd->timer, jiffies + dhd_watchdog_ms * HZ / 1000);
 #else
 	if (dhd->wd_timer_valid)
 		mod_timer(&dhd->timer, jiffies + dhd_watchdog_ms * HZ / 1000);
@@ -2278,15 +2277,8 @@ dhd_os_wd_timer(void *bus, uint wdtick)
 #endif /* !defined(CONTINUOUS_WATCHDOG) */
 
 #if defined(CONTINUOUS_WATCHDOG)
-	/* Stop timer and restart at new value */
-	if (dhd->wd_timer_valid == TRUE) {
-		del_timer_sync(&dhd->timer);
-		dhd->wd_timer_valid = FALSE;
-	}
-
 	dhd_watchdog_ms = (uint)wdtick;
-	dhd->timer.expires = jiffies + dhd_watchdog_ms * HZ / 1000;
-	add_timer(&dhd->timer);
+	mod_timer(&dhd->timer, jiffies + dhd_watchdog_ms * HZ / 1000);
 
 	dhd->wd_timer_valid = TRUE;
 #else
@@ -2300,21 +2292,9 @@ dhd_os_wd_timer(void *bus, uint wdtick)
 
 	if (wdtick) {
 		dhd_watchdog_ms = (uint)wdtick;
-		if (save_dhd_watchdog_ms != dhd_watchdog_ms){
 
-			if (dhd->wd_timer_valid == TRUE)
-				/* Stop timer and restart at new value */
-				del_timer_sync(&dhd->timer);
-
-			/* Create timer again when watchdog period is
-			   dynamically changed or in the first instance
-			*/
-			dhd->timer.expires = jiffies + dhd_watchdog_ms * HZ / 1000;
-			add_timer(&dhd->timer);
-		}else {
-			/* Re arm the timer, at last watchdog period */
-			mod_timer(&dhd->timer, jiffies + dhd_watchdog_ms * HZ / 1000);
-		}
+		/* Re arm the timer, at last watchdog period */
+		mod_timer(&dhd->timer, jiffies + dhd_watchdog_ms * HZ / 1000);
 
 		dhd->wd_timer_valid = TRUE;
 		save_dhd_watchdog_ms = wdtick;
