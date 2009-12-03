@@ -166,7 +166,7 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(wdf_device_info_t, dhd_get_wdf_device_info)
 	#define _DHD_PM_RESUME_WAIT(a, b) do {\
 			int retry = 0; \
 			while (dhd_mmc_suspend && retry++ != b) { \
-				wait_event_timeout(a, FALSE, HZ/100); \
+				wait_event_interruptible_timeout(a, FALSE, HZ/100); \
 			} \
 		} 	while (0)
 	#define DHD_PM_RESUME_WAIT(a) 			_DHD_PM_RESUME_WAIT(a, 30)
@@ -178,7 +178,7 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(wdf_device_info_t, dhd_get_wdf_device_info)
 	#define SPINWAIT_SLEEP(a, exp, us) do { \
 		uint countdown = (us) + 9; \
 		while ((exp) && (countdown >= 10)) { \
-			wait_event_timeout(a, FALSE, HZ/100); \
+			wait_event_interruptible_timeout(a, FALSE, HZ/100); \
 			countdown -= 10; \
 		} \
 	} while (0)
