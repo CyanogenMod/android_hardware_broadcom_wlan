@@ -75,6 +75,7 @@ struct bcmsdh_hc {
 	bcmsdh_info_t *sdh;		/* SDIO Host Controller handle */
 	void *ch;
 	unsigned int oob_irq;
+	unsigned long oob_flags;
 };
 static bcmsdh_hc_t *sdhcinfo = NULL;
 
@@ -175,6 +176,7 @@ int bcmsdh_probe(struct device *dev)
 #endif /* BCMLXSDMMC */
 	int irq = 0;
 	uint32 vendevid;
+	unsigned long irq_flags = IRQF_TRIGGER_FALLING;
 
 #if !defined(BCMLXSDMMC) && defined(BCMPLATFORM_BUS)
 	pdev = to_platform_device(dev);
@@ -185,7 +187,7 @@ int bcmsdh_probe(struct device *dev)
 #endif /* BCMLXSDMMC */
 
 #if defined(OOB_INTR_ONLY)
-	irq = dhd_customer_oob_irq_map();
+	irq = dhd_customer_oob_irq_map(&irq_flags);
 	if  (irq < 0) {
 		SDLX_MSG(("%s: Host irq is not defined\n", __FUNCTION__));
 		return 1;
@@ -222,6 +224,7 @@ int bcmsdh_probe(struct device *dev)
 #endif /* BCMLXSDMMC */
 	sdhc->sdh = sdh;
 	sdhc->oob_irq = irq;
+	sdhc->oob_flags = irq_flags;
 
 	/* chain SDIO Host Controller info together */
 	sdhc->next = sdhcinfo;
@@ -557,14 +560,14 @@ int bcmsdh_register_oob_intr(void * dhdp)
 
 	sdhcinfo->dev->driver_data = dhdp;
 
-	set_irq_wake(sdhcinfo->oob_irq, 1);
-
 	/* Refer to customer Host IRQ docs about proper irqflags definition */
-	error = request_irq(sdhcinfo->oob_irq, wlan_oob_irq, IRQF_TRIGGER_FALLING,
+	error = request_irq(sdhcinfo->oob_irq, wlan_oob_irq, sdhcinfo->oob_flags,
 		"bcmsdh_sdmmc", NULL);
 
 	if (error)
 		return -ENODEV;
+
+	set_irq_wake(sdhcinfo->oob_irq, 1);
 
 	return 0;
 }

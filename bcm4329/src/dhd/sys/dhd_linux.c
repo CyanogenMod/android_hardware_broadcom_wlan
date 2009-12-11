@@ -72,10 +72,12 @@ struct dhd_bus *g_bus;
 static struct wifi_platform_data *wifi_control_data = NULL;
 static struct resource *wifi_irqres = NULL;
 
-int wifi_get_irq_number(void)
+int wifi_get_irq_number(unsigned long *irq_flags_ptr)
 {
-	if (wifi_irqres)
+	if (wifi_irqres) {
+		*irq_flags_ptr = wifi_irqres->flags & IRQF_TRIGGER_MASK;
 		return (int)wifi_irqres->start;
+	}
 #ifdef CUSTOM_OOB_GPIO_NUM
 	return CUSTOM_OOB_GPIO_NUM;
 #else
@@ -888,6 +890,7 @@ dhd_start_xmit(struct sk_buff *skb, struct net_device *net)
 	/* Reject if down */
 	if (!dhd->pub.up || (dhd->pub.busstate == DHD_BUS_DOWN)) {
 		DHD_ERROR(("%s: xmit rejected due to dhd bus down status \n", __FUNCTION__));
+		netif_stop_queue(net);
 		return -ENODEV;
 	}
 

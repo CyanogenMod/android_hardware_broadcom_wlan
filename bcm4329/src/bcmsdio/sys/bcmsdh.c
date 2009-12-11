@@ -40,6 +40,9 @@
 
 #include <sdio.h>	/* sdio spec */
 
+/* Defines number of access retries to configuration registers */
+#define SDIOH_API_ACCESS_RETRY_LIMIT	2
+
 const uint bcmsdh_msglevel = BCMSDH_ERROR_VAL;
 
 
@@ -207,6 +210,9 @@ bcmsdh_cfg_read(void *sdh, uint fnc_num, uint32 addr, int *err)
 {
 	bcmsdh_info_t *bcmsdh = (bcmsdh_info_t *)sdh;
 	SDIOH_API_RC status;
+#ifdef SDIOH_API_ACCESS_RETRY_LIMIT
+	int32 retry = 0;
+#endif
 	uint8 data = 0;
 
 	if (!bcmsdh)
@@ -214,7 +220,15 @@ bcmsdh_cfg_read(void *sdh, uint fnc_num, uint32 addr, int *err)
 
 	ASSERT(bcmsdh->init_success);
 
+#ifdef SDIOH_API_ACCESS_RETRY_LIMIT
+	do {
+		if (retry)	/* wait for 1 ms till bus get settled down */
+			OSL_DELAY(1000);
+#endif
 	status = sdioh_cfg_read(bcmsdh->sdioh, fnc_num, addr, (uint8 *)&data);
+#ifdef SDIOH_API_ACCESS_RETRY_LIMIT
+	} while (!SDIOH_API_SUCCESS(status) && (retry++ < SDIOH_API_ACCESS_RETRY_LIMIT));
+#endif
 	if (err)
 		*err = (SDIOH_API_SUCCESS(status) ? 0 : BCME_SDIO_ERROR);
 
@@ -229,13 +243,24 @@ bcmsdh_cfg_write(void *sdh, uint fnc_num, uint32 addr, uint8 data, int *err)
 {
 	bcmsdh_info_t *bcmsdh = (bcmsdh_info_t *)sdh;
 	SDIOH_API_RC status;
+#ifdef SDIOH_API_ACCESS_RETRY_LIMIT
+	int32 retry = 0;
+#endif
 
 	if (!bcmsdh)
 		bcmsdh = l_bcmsdh;
 
 	ASSERT(bcmsdh->init_success);
 
+#ifdef SDIOH_API_ACCESS_RETRY_LIMIT
+	do {
+		if (retry)	/* wait for 1 ms till bus get settled down */
+			OSL_DELAY(1000);
+#endif
 	status = sdioh_cfg_write(bcmsdh->sdioh, fnc_num, addr, (uint8 *)&data);
+#ifdef SDIOH_API_ACCESS_RETRY_LIMIT
+	} while (!SDIOH_API_SUCCESS(status) && (retry++ < SDIOH_API_ACCESS_RETRY_LIMIT));
+#endif
 	if (err)
 		*err = SDIOH_API_SUCCESS(status) ? 0 : BCME_SDIO_ERROR;
 
