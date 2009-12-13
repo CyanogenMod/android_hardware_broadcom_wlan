@@ -46,7 +46,7 @@ extern  void bcm_wlan_power_on(int);
 #ifdef CUSTOMER_HW2
 int wifi_set_carddetect(int on);
 int wifi_set_power(int on, unsigned long msec);
-int wifi_get_irq_number(void);
+int wifi_get_irq_number(unsigned long *irq_flags_ptr);
 #endif
 
 #if defined(OOB_INTR_ONLY)
@@ -61,18 +61,18 @@ static int dhd_oob_gpio_num = -1; /* GG 19 */
 module_param(dhd_oob_gpio_num, int, 0644);
 MODULE_PARM_DESC(dhd_oob_gpio_num, "DHD oob gpio number");
 
-int dhd_customer_oob_irq_map(void)
+int dhd_customer_oob_irq_map(unsigned long *irq_flags_ptr)
 {
 	int  host_oob_irq;
 #ifdef CUSTOMER_HW2
-	host_oob_irq = wifi_get_irq_number();
+	host_oob_irq = wifi_get_irq_number(irq_flags_ptr);
 #else
 #if defined(CUSTOM_OOB_GPIO_NUM)
 	if (dhd_oob_gpio_num < 0) {
 		dhd_oob_gpio_num = CUSTOM_OOB_GPIO_NUM;
 	}
 #endif
-
+	*irq_flags_ptr = IRQF_TRIGGER_FALLING;
 	if (dhd_oob_gpio_num < 0) {
 		WL_ERROR(("%s: ERROR customer specific Host GPIO is NOT defined \n", \
 			             __FUNCTION__));
