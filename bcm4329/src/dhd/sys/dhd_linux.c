@@ -1747,7 +1747,11 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen)
 	if (dhd_add_if(dhd, 0, (void *)net, net->name, NULL, 0, 0) == DHD_BAD_IF)
 		goto fail;
 
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 31))
 	net->open = NULL;
+#else
+	net->netdev_ops = NULL;
+#endif
 
 	init_MUTEX(&dhd->proto_sem);
 	/* Initialize other structure content */
@@ -1941,6 +1945,26 @@ dhd_iovar(dhd_pub_t *pub, int ifidx, char *name, char *cmd_buf, uint cmd_len, in
 	return ret;
 }
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 31))
+static struct net_device_ops dhd_ops_pri = {
+	.ndo_open = dhd_open,
+	.ndo_stop = dhd_stop,
+	.ndo_get_stats = dhd_get_stats,
+	.ndo_do_ioctl = dhd_ioctl_entry,
+	.ndo_start_xmit = dhd_start_xmit,
+	.ndo_set_mac_address = dhd_set_mac_address,
+	.ndo_set_multicast_list = dhd_set_multicast_list,
+};
+
+static struct net_device_ops dhd_ops_virt = {
+	.ndo_get_stats = dhd_get_stats,
+	.ndo_do_ioctl = dhd_ioctl_entry,
+	.ndo_start_xmit = dhd_start_xmit,
+	.ndo_set_mac_address = dhd_set_mac_address,
+	.ndo_set_multicast_list = dhd_set_multicast_list,
+};
+#endif
+
 int
 dhd_net_attach(dhd_pub_t *dhdp, int ifidx)
 {
@@ -1951,30 +1975,40 @@ dhd_net_attach(dhd_pub_t *dhdp, int ifidx)
 	DHD_TRACE(("%s: ifidx %d\n", __FUNCTION__, ifidx));
 
 	ASSERT(dhd && dhd->iflist[ifidx]);
-	ASSERT(dhd->iflist[ifidx]->net);
-	ASSERT(!dhd->iflist[ifidx]->net->open);
+	net = dhd->iflist[ifidx]->net;
+
+	ASSERT(net);
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 31))
+	ASSERT(!net->open);
+	net->get_stats = dhd_get_stats;
+	net->do_ioctl = dhd_ioctl_entry;
+	net->hard_start_xmit = dhd_start_xmit;
+	net->set_mac_address = dhd_set_mac_address;
+	net->set_multicast_list = dhd_set_multicast_list;
+	net->open = net->stop = NULL;
+#else
+	ASSERT(!net->netdev_ops);
+	net->netdev_ops = &dhd_ops_virt;
+#endif
 
 	/* Ok, link into the network layer... */
-	net = dhd->iflist[ifidx]->net;
 	if (ifidx == 0) {
 		/*
 		 * device functions for the primary interface only
 		 */
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 31))
 		net->open = dhd_open;
 		net->stop = dhd_stop;
+#else
+		net->netdev_ops = &dhd_ops_pri;
+#endif
 	} else {
-		net->open = net->stop = NULL;
 		/*
 		 * We have to use the primary MAC for virtual interfaces
 		 */
 		memcpy(temp_addr, dhd->iflist[ifidx]->mac_addr, ETHER_ADDR_LEN);
 	}
-	net->get_stats = dhd_get_stats;
-	net->do_ioctl = dhd_ioctl_entry;
-	net->hard_start_xmit = dhd_start_xmit;
 	net->hard_header_len = ETH_HLEN + dhd->pub.hdrlen;
-	net->set_mac_address = dhd_set_mac_address;
-	net->set_multicast_list = dhd_set_multicast_list;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 24)
 	net->ethtool_ops = &dhd_ethtool_ops;
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 24) */
@@ -2007,7 +2041,11 @@ dhd_net_attach(dhd_pub_t *dhdp, int ifidx)
 	return 0;
 
 fail:
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 31))
 	net->open = NULL;
+#else
+	net->netdev_ops = NULL;
+#endif
 	return BCME_ERROR;
 }
 
@@ -2068,7 +2106,11 @@ dhd_detach(dhd_pub_t *dhdp)
 
 			ifp = dhd->iflist[0];
 			ASSERT(ifp);
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 31))
 			if (ifp->net->open) {
+#else
+			if (ifp->net->netdev_ops == &dhd_ops_pri) {
+#endif
 				dhd_stop(ifp->net);
 				unregister_netdev(ifp->net);
 			}
@@ -2127,22 +2169,27 @@ dhd_module_init(void)
 		return -EINVAL;
 	} while (0);
 
+	/* Call customer gpio to turn on power with WL_REG_ON signal */
+	dhd_customer_gpio_wlan_ctrl(WLAN_POWER_ON);
+
 #if defined(CUSTOMER_HW2) && defined(CONFIG_WIFI_CONTROL_FUNC)
 	sema_init(&wifi_control_sem, 0);
-	wifi_add_dev();
+
+	error = wifi_add_dev();
+	if (error) {
+		DHD_ERROR(("%s: platform_driver_register failed\n", __FUNCTION__));
+		goto fail_0;
+	}
 
 	/* Waiting callback after platform_driver_register is done or exit with error */
 	if (down_timeout(&wifi_control_sem,  msecs_to_jiffies(5000)) != 0) {
 		error = -EINVAL;
-		DHD_ERROR(("%s: platform_driver_register callback timeout\n", __FUNCTION__));
-		goto fail;
+		DHD_ERROR(("%s: platform_driver_register timeout\n", __FUNCTION__));
+		goto fail_1;
 	}
 #endif /* #if defined(CUSTOMER_HW2) && defined(CONFIG_WIFI_CONTROL_FUNC) */
 
-	/* Call customer gpio to turn on power with WL_REG_ON signal */
-	dhd_customer_gpio_wlan_ctrl(WLAN_POWER_ON);
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && 1
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
 	sema_init(&dhd_registration_sem, 0);
 #endif 
 
@@ -2150,8 +2197,11 @@ dhd_module_init(void)
 
 	if (!error)
 		printf("\n%s\n", dhd_version);
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && 1
+	else {
+		DHD_ERROR(("%s: sdio_register_driver failed\n", __FUNCTION__));
+		goto fail_1;
+	}
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
 	/*
 	 * Wait till MMC sdio_register_driver callback called and made driver attach.
 	 * It's needed to make sync up exit from dhd insmod  and
@@ -2159,13 +2209,23 @@ dhd_module_init(void)
 	 */
 	if (down_timeout(&dhd_registration_sem,  msecs_to_jiffies(10000)) != 0) {
 		error = -EINVAL;
-		DHD_ERROR(("%s: sdio_register_driver failed \n", __FUNCTION__));
+		DHD_ERROR(("%s: sdio_register_driver timeout\n", __FUNCTION__));
+		goto fail_2;
 	}
-#endif 
-
+#endif
+	return error;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
+fail_2:
+	dhd_bus_unregister();
+#endif
+fail_1:
 #if defined(CUSTOMER_HW2) && defined(CONFIG_WIFI_CONTROL_FUNC)
-fail:
+	wifi_del_dev();
+fail_0:
 #endif /* defined(CUSTOMER_HW2) && defined(CONFIG_WIFI_CONTROL_FUNC) */
+
+	/* Call customer gpio to turn off power with WL_REG_ON signal */
+	dhd_customer_gpio_wlan_ctrl(WLAN_POWER_OFF);
 
 	return error;
 }
@@ -2503,7 +2563,15 @@ dhd_dev_reset(struct net_device *dev, uint8 flag)
 {
 	dhd_info_t *dhd = *(dhd_info_t **)netdev_priv(dev);
 
+        /* Turning off watchdog */
+        if (flag)
+                dhd_os_wd_timer(&dhd->pub, 0);
+
 	dhd_bus_devreset(&dhd->pub, flag);
+
+        /* Turning on watchdog back */
+        if (!flag)
+                dhd_os_wd_timer(&dhd->pub, dhd_watchdog_ms);
 
 	DHD_ERROR(("%s:  WLAN OFF DONE\n", __FUNCTION__));
 

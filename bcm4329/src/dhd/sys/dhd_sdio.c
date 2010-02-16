@@ -5379,9 +5379,11 @@ dhd_bus_devreset(dhd_pub_t *dhdp, uint8 flag)
 			/* Force flow control as protection when stop come before ifconfig_down */
 			dhd_txflowcontrol(bus->dhd, 0, ON);
 #endif /* !defined(IGNORE_ETH0_DOWN) */
+			dhd_os_proto_block(dhdp);
 			/* save country settinng if was pre-setup with priv ioctl */
 			dhdcdc_query_ioctl(bus->dhd, 0, WLC_GET_COUNTRY,
 				bus->dhd->country_code, sizeof(bus->dhd->country_code));
+			dhd_os_proto_unblock(dhdp);
 			/* Expect app to have torn down any connection before calling */
 			/* Stop the bus, disable F2 */
 			dhd_bus_stop(bus, FALSE);

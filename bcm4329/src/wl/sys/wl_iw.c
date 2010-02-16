@@ -258,24 +258,35 @@ dev_wlc_ioctl(
 	struct ifreq ifr;
 	wl_ioctl_t ioc;
 	mm_segment_t fs;
-	int ret;
+	int ret = -EINVAL;
 
-	memset(&ioc, 0, sizeof(ioc));
-	ioc.cmd = cmd;
-	ioc.buf = arg;
-	ioc.len = len;
+	if (g_onoff == G_WLAN_SET_ON) {
+		memset(&ioc, 0, sizeof(ioc));
+		ioc.cmd = cmd;
+		ioc.buf = arg;
+		ioc.len = len;
 
-	strcpy(ifr.ifr_name, dev->name);
-	ifr.ifr_data = (caddr_t) &ioc;
+		strcpy(ifr.ifr_name, dev->name);
+		ifr.ifr_data = (caddr_t) &ioc;
 
-	
-	dev_open(dev);
+		ret = dev_open(dev);
+		if (ret) {
+			WL_ERROR(("%s: Error dev_open: %d\n", __func__, ret));
+			return ret;
+		}
 
-	fs = get_fs();
-	set_fs(get_ds());
-	ret = dev->do_ioctl(dev, &ifr, SIOCDEVPRIVATE);
-	set_fs(fs);
-
+		fs = get_fs();
+		set_fs(get_ds());
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 31))
+		ret = dev->do_ioctl(dev, &ifr, SIOCDEVPRIVATE);
+#else
+		ret = dev->netdev_ops->ndo_do_ioctl(dev, &ifr, SIOCDEVPRIVATE);
+#endif
+		set_fs(fs);
+	}
+	else {
+		WL_TRACE(("%s: call after driver stop\n", __FUNCTION__));
+	}
 	return ret;
 }
 
@@ -522,9 +533,9 @@ wl_iw_set_country(
 	int country_offset;
 	int country_code_size;
 
+	WL_TRACE(("%s\n", __FUNCTION__));
 	memset(country_code, 0, sizeof(country_code));
 
-	
 	country_offset = strcspn(extra, " ");
 	country_code_size = strlen(extra) - country_offset;
 
@@ -1769,10 +1780,14 @@ static void wl_iw_send_scan_complete(iscan_info_t *iscan)
 	union iwreq_data wrqu;
 	char extra[IW_CUSTOM_MAX + 1];
 
-		memset(&wrqu, 0, sizeof(wrqu));
-		memset(extra, 0, sizeof(extra));
-		wireless_send_event(iscan->dev, SIOCGIWSCAN, &wrqu, extra);
-		WL_TRACE(("Send Event SCAN complete\n"));
+	memset(&wrqu, 0, sizeof(wrqu));
+	memset(extra, 0, sizeof(extra));
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 31))
+	wireless_send_event(iscan->dev, SIOCGIWSCAN, &wrqu, extra);
+#else
+	wireless_send_event(iscan->dev, SIOCGIWSCAN, &wrqu, NULL);
+#endif
+	WL_TRACE(("Send Event SCAN complete\n"));
 #endif
 }
 static int
@@ -2376,16 +2391,18 @@ wl_iw_get_scan_prep(
 
 		
 		if (bi->rateset.count) {
-			value = event + IW_EV_LCP_LEN;
-			iwe.cmd = SIOCGIWRATE;
-			
-			iwe.u.bitrate.fixed = iwe.u.bitrate.disabled = 0;
-			for (j = 0; j < bi->rateset.count && j < IW_MAX_BITRATES; j++) {
-				iwe.u.bitrate.value = (bi->rateset.rates[j] & 0x7f) * 500000;
-				value = IWE_STREAM_ADD_VALUE(info, event, value, end, &iwe,
-					IW_EV_PARAM_LEN);
+			if (((event - extra) + IW_EV_LCP_LEN) <= (int)end) { 
+				value = event + IW_EV_LCP_LEN;
+				iwe.cmd = SIOCGIWRATE;
+
+				iwe.u.bitrate.fixed = iwe.u.bitrate.disabled = 0;
+				for (j = 0; j < bi->rateset.count && j < IW_MAX_BITRATES; j++) {
+					iwe.u.bitrate.value = (bi->rateset.rates[j] & 0x7f) * 500000;
+					value = IWE_STREAM_ADD_VALUE(info, event, value, end, &iwe,
+						IW_EV_PARAM_LEN);
+				}
+				event = value;
 			}
-			event = value;
 		}
 	} 
 
@@ -2473,6 +2490,14 @@ wl_iw_get_scan(
 	list->buflen = dtoh32(list->buflen);
 	list->version = dtoh32(list->version);
 	list->count = dtoh32(list->count);
+
+	if (list->version != WL_BSS_INFO_VERSION) {
+		WL_ERROR(("%s : list->version %d != WL_BSS_INFO_VERSION\n",
+				__FUNCTION__, list->version));
+		if (g_scan_specified_ssid)
+			kfree(list);
+		return -EINVAL;
+	}
 
 	if (g_scan_specified_ssid) {
 		
@@ -4302,7 +4327,7 @@ wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data)
 	uint16 flags =  ntoh16(e->flags);
 	uint32 datalen = ntoh32(e->datalen);
 	uint32 status =  ntoh32(e->status);
-		uint32 toto;
+	uint32 toto;
 
 	memset(&wrqu, 0, sizeof(wrqu));
 	memset(extra, 0, sizeof(extra));
@@ -4444,8 +4469,14 @@ wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data)
 		break;
 	}
 #ifndef SANDGATE2G
-	if (cmd)
+	if (cmd) {
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 31))
+		if (cmd == SIOCGIWSCAN)
+			wireless_send_event(dev, cmd, &wrqu, NULL);
+		else
+#endif
 		wireless_send_event(dev, cmd, &wrqu, extra);
+	}
 #endif
 
 #if WIRELESS_EXT > 14

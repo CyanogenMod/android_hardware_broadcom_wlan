@@ -539,7 +539,7 @@ static irqreturn_t wlan_oob_irq(int irq, void *dev_id)
 {
 	dhd_pub_t *dhdp;
 
-	dhdp = (dhd_pub_t *)sdhcinfo->dev->driver_data;
+	dhdp = (dhd_pub_t *)dev_get_drvdata(sdhcinfo->dev);
 
 	if (dhdp == NULL) {
 		disable_irq(sdhcinfo->oob_irq);
@@ -558,7 +558,7 @@ int bcmsdh_register_oob_intr(void * dhdp)
 
 	SDLX_MSG(("%s Enter\n", __FUNCTION__));
 
-	sdhcinfo->dev->driver_data = dhdp;
+	dev_set_drvdata(sdhcinfo->dev, dhdp);
 
 	/* Refer to customer Host IRQ docs about proper irqflags definition */
 	error = request_irq(sdhcinfo->oob_irq, wlan_oob_irq, sdhcinfo->oob_flags,

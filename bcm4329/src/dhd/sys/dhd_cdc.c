@@ -524,6 +524,7 @@ int dhd_set_suspend(int value, dhd_pub_t *dhd)
 #define htod32(i) i
 
 	if (dhd && dhd->up) {
+		dhd_os_proto_block(dhd);
 		if (value) {
 			dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM,
 				(char *)&power_mode, sizeof(power_mode));
@@ -563,6 +564,7 @@ int dhd_set_suspend(int value, dhd_pub_t *dhd)
 			dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
 #endif /* CUSTOMER_HW2 */
 		}
+		dhd_os_proto_unblock(dhd);
 	}
 
 	return 0;
@@ -626,11 +628,13 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	char buf[256];
 	uint filter_mode = 1;
 
+	dhd_os_proto_block(dhd);
 	/* Get the device MAC address */
 	strcpy(iovbuf, "cur_etheraddr");
 	if ((ret = dhdcdc_query_ioctl(dhd, 0, WLC_GET_VAR, iovbuf, sizeof(iovbuf))) < 0) {
 		DHD_ERROR(("%s: can't get MAC address , error=%d\n", __FUNCTION__, ret));
-		return BCME_NOTUP;
+		dhd_os_proto_unblock(dhd);
+		return -BCME_NOTUP;
 	}
 	memcpy(dhd->mac.octet, iovbuf, ETHER_ADDR_LEN);
 
@@ -734,7 +738,8 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 
 	if (mask_size != pattern_size) {
 		printk("Mask and pattern not the same size\n");
-		return -1;
+		dhd_os_proto_unblock(dhd);
+		return -EINVAL;
 	}
 
 	pkt_filter.u.pattern.size_bytes = mask_size;
@@ -754,6 +759,7 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	bcm_mkiovar("pkt_filter_mode", (char *)&filter_mode, 4, iovbuf, sizeof(iovbuf));
 	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
 
+	dhd_os_proto_unblock(dhd);
 	return 0;
 }
 

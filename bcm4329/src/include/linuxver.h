@@ -429,7 +429,7 @@ pci_restore_state(struct pci_dev *dev, u32 *buffer)
 #define KILL_PROC(pid, sig) \
 { \
 	struct task_struct *tsk; \
-	tsk = find_task_by_vpid(pid); \
+	tsk = pid_task(find_vpid(pid), PIDTYPE_PID); \
 	if (tsk) send_sig(sig, tsk, 1); \
 }
 #else
