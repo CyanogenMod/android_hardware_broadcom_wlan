@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wl_iw.h,v 1.5.34.1.6.13.2.2 2010/03/16 22:09:45 Exp $
+ * $Id: wl_iw.h,v 1.5.34.1.6.13 2010/03/10 03:55:02 Exp $
  */
 
 
@@ -35,26 +35,23 @@
 #include <wlioctl.h>
 
 
-
-
-
-#define	WL_IW_RSSI_MINVAL		-200	
-#define	WL_IW_RSSI_NO_SIGNAL	-91	
-#define	WL_IW_RSSI_VERY_LOW	-80	
-#define	WL_IW_RSSI_LOW		-70	
-#define	WL_IW_RSSI_GOOD		-68	
-#define	WL_IW_RSSI_VERY_GOOD	-58	
-#define	WL_IW_RSSI_EXCELLENT	-57	
-#define	WL_IW_RSSI_INVALID	 0	
-#define MAX_WX_STRING 80
-#define isprint(c) bcm_isprint(c)
+#define	WL_IW_RSSI_MINVAL	-200
+#define	WL_IW_RSSI_NO_SIGNAL	-91
+#define	WL_IW_RSSI_VERY_LOW	-80
+#define	WL_IW_RSSI_LOW		-70
+#define	WL_IW_RSSI_GOOD		-68
+#define	WL_IW_RSSI_VERY_GOOD	-58
+#define	WL_IW_RSSI_EXCELLENT	-57
+#define	WL_IW_RSSI_INVALID	 0
+#define MAX_WX_STRING		80
+#define isprint(c)		bcm_isprint(c)
 #define WL_IW_SET_ACTIVE_SCAN	(SIOCIWFIRSTPRIV+1)
-#define WL_IW_GET_RSSI			(SIOCIWFIRSTPRIV+3)
+#define WL_IW_GET_RSSI		(SIOCIWFIRSTPRIV+3)
 #define WL_IW_SET_PASSIVE_SCAN	(SIOCIWFIRSTPRIV+5)
 #define WL_IW_GET_LINK_SPEED	(SIOCIWFIRSTPRIV+7)
 #define WL_IW_GET_CURR_MACADDR	(SIOCIWFIRSTPRIV+9)
-#define WL_IW_SET_STOP				(SIOCIWFIRSTPRIV+11)
-#define WL_IW_SET_START			(SIOCIWFIRSTPRIV+13)
+#define WL_IW_SET_STOP		(SIOCIWFIRSTPRIV+11)
+#define WL_IW_SET_START		(SIOCIWFIRSTPRIV+13)
 
 
 #define WL_SET_AP_CFG           (SIOCIWFIRSTPRIV+15)
@@ -66,10 +63,10 @@
 #define WL_FW_RELOAD            (SIOCIWFIRSTPRIV+27)
 #define WL_AP_SPARE2            (SIOCIWFIRSTPRIV+29)
 #define WL_AP_SPARE3            (SIOCIWFIRSTPRIV+31)
-#define 		G_SCAN_RESULTS 8*1024
-#define 		WE_ADD_EVENT_FIX	0x80
-#define          G_WLAN_SET_ON	0
-#define          G_WLAN_SET_OFF	1
+#define G_SCAN_RESULTS		(8*1024)
+#define WE_ADD_EVENT_FIX	0x80
+#define G_WLAN_SET_ON		0
+#define G_WLAN_SET_OFF		1
 
 #define CHECK_EXTRA_FOR_NULL(extra) \
 if (!extra) { \
@@ -83,8 +80,8 @@ typedef struct wl_iw {
 	struct iw_statistics wstats;
 
 	int spy_num;
-	uint32 pwsec;			
-	uint32 gwsec;			
+	uint32 pwsec;
+	uint32 gwsec;
 
 	struct ether_addr spy_addr[IW_MAX_SPY];
 	struct iw_quality spy_qual[IW_MAX_SPY];
@@ -100,7 +97,7 @@ struct wl_ctrl {
 	struct completion sysioc_exited;
 };
 
-#define WLC_IW_SS_CACHE_MAXLEN				512
+#define WLC_IW_SS_CACHE_MAXLEN			512
 #define WLC_IW_SS_CACHE_CTRL_FIELD_MAXLEN	32
 #define WLC_IW_BSS_INFO_MAXLEN 				\
 	(WLC_IW_SS_CACHE_MAXLEN - WLC_IW_SS_CACHE_CTRL_FIELD_MAXLEN)
@@ -139,36 +136,43 @@ struct ap_profile {
 	uint8	ssid[SSID_LEN];
 	uint8	sec[SEC_LEN];
 	uint8	key[KEY_LEN];
-	uint32	channel; 
+	uint32	channel;
 	uint32	preamble;
-	uint32	max_scb;	
+	uint32	max_scb;
 };
 
 
 #define MACLIST_MODE_DISABLED	0
 #define MACLIST_MODE_ENABLED	1
-#define MACLIST_MODE_ALLOW		2
+#define MACLIST_MODE_ALLOW	2
 struct mflist {
 	uint count;
 	struct ether_addr ea[16];
 };
+
 struct mac_list_set {
 	uint32	mode;
 	struct mflist white_list;
 	struct mflist black_list;
 };
-#endif   
+#endif
 
 #if WIRELESS_EXT > 12
 #include <net/iw_handler.h>
 extern const struct iw_handler_def wl_iw_handler_def;
-#endif 
+#endif
 
 extern int wl_iw_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
 extern void wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data);
 extern int wl_iw_get_wireless_stats(struct net_device *dev, struct iw_statistics *wstats);
 int wl_iw_attach(struct net_device *dev, void * dhdp);
 void wl_iw_detach(void);
+int wl_control_wl_start(struct net_device *dev);
+
+extern int net_os_wake_lock(struct net_device *dev);
+extern int net_os_wake_unlock(struct net_device *dev);
+extern int net_os_wake_lock_timeout(struct net_device *dev);
+extern int net_os_wake_lock_timeout_enable(struct net_device *dev);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)
 #define IWE_STREAM_ADD_EVENT(info, stream, ends, iwe, extra) \
@@ -186,4 +190,4 @@ void wl_iw_detach(void);
 	iwe_stream_add_point(stream, ends, iwe, extra)
 #endif
 
-#endif 
+#endif

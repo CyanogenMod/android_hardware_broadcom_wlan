@@ -689,9 +689,10 @@ dhdsdio_clkctl(dhd_bus_t *bus, uint target, bool pendok)
 
 	/* Early exit if we're already there */
 	if (bus->clkstate == target) {
-		if (target == CLK_AVAIL)
+		if (target == CLK_AVAIL) {
 			dhd_os_wd_timer(bus->dhd, dhd_watchdog_ms);
 			bus->activity = TRUE;
+		}
 		return BCME_OK;
 	}
 
@@ -3751,7 +3752,7 @@ dhdsdio_dpc(dhd_bus_t *bus)
 		if (err) {
 			DHD_ERROR(("%s: error reading DEVCTL: %d\n", __FUNCTION__, err));
 			bus->dhd->busstate = DHD_BUS_DOWN;
-		}else
+		} else
 			ASSERT(devctl & SBSDIO_DEVCTL_CA_INT_ONLY);
 #endif /* DHD_DEBUG */
 
@@ -4009,12 +4010,13 @@ dhdsdio_isr(void *arg)
 
 #if defined(SDIO_ISR_THREAD)
 	DHD_TRACE(("Calling dhdsdio_dpc() from %s\n", __FUNCTION__));
+	dhd_os_wake_lock(bus->dhd);
 	while (dhdsdio_dpc(bus));
+	dhd_os_wake_unlock(bus->dhd);
 #else
 	bus->dpc_sched = TRUE;
 	dhd_sched_dpc(bus->dhd);
 #endif 
-
 
 }
 
@@ -4526,12 +4528,15 @@ dhdsdio_probe(uint16 venid, uint16 devid, uint16 bus_no, uint16 slot,
 
 	/* if firmware path present try to download and bring up bus */
 	if ((ret = dhd_bus_start(bus->dhd)) != 0) {
+#if 1
 		DHD_ERROR(("%s: failed\n", __FUNCTION__));
 		goto fail;
+#else
 		if (ret == BCME_NOTUP)  {
 			DHD_ERROR(("%s: dongle is not responding\n", __FUNCTION__));
 			goto fail;
 		}
+#endif
 	}
 	/* Ok, have the per-port tell the stack we're open for business */
 	if (dhd_net_attach(bus->dhd, 0) != 0) {
@@ -4832,7 +4837,6 @@ dhd_bus_download_firmware(struct dhd_bus *bus, osl_t *osh,
 
 	ret = dhdsdio_download_firmware(bus, osh, bus->sdh);
 
-
 	return ret;
 }
 
@@ -4842,12 +4846,13 @@ dhdsdio_download_firmware(struct dhd_bus *bus, osl_t *osh, void *sdh)
 	bool ret;
 
 	/* Download the firmware */
+	dhd_os_wake_lock(bus->dhd);
 	dhdsdio_clkctl(bus, CLK_AVAIL, FALSE);
 
 	ret = _dhdsdio_download_firmware(bus) == 0;
 
 	dhdsdio_clkctl(bus, CLK_SDONLY, FALSE);
-
+	dhd_os_wake_unlock(bus->dhd);
 	return ret;
 }
 

@@ -75,7 +75,7 @@ struct bcmsdh_hc {
 	bcmsdh_info_t *sdh;		/* SDIO Host Controller handle */
 	void *ch;
 	unsigned int oob_irq;
-	unsigned long oob_flags; /* OOB Host specifiction as edge and etc */
+	unsigned long oob_flags;
 };
 static bcmsdh_hc_t *sdhcinfo = NULL;
 
@@ -176,7 +176,7 @@ int bcmsdh_probe(struct device *dev)
 #endif /* BCMLXSDMMC */
 	int irq = 0;
 	uint32 vendevid;
-	unsigned long irq_flags = 0;
+	unsigned long irq_flags = IRQF_TRIGGER_FALLING;
 
 #if !defined(BCMLXSDMMC) && defined(BCMPLATFORM_BUS)
 	pdev = to_platform_device(dev);
@@ -187,7 +187,6 @@ int bcmsdh_probe(struct device *dev)
 #endif /* BCMLXSDMMC */
 
 #if defined(OOB_INTR_ONLY)
-	irq_flags = IRQF_TRIGGER_FALLING;
 	irq = dhd_customer_oob_irq_map(&irq_flags);
 	if  (irq < 0) {
 		SDLX_MSG(("%s: Host irq is not defined\n", __FUNCTION__));
@@ -332,18 +331,18 @@ static struct pci_driver bcmsdh_pci_driver = {
 #endif
 	suspend:	NULL,
 	resume:		NULL,
-	};
+};
 
 
 extern uint sd_pci_slot;	/* Force detection to a particular PCI */
-							/* slot only . Allows for having multiple */
-							/* WL devices at once in a PC */
-							/* Only one instance of dhd will be */
-							/* useable at a time */
-							/* Upper word is bus number, */
-							/* lower word is slot number */
-							/* Default value of 0xFFFFffff turns this */
-							/* off */
+				/* slot only . Allows for having multiple */
+				/* WL devices at once in a PC */
+				/* Only one instance of dhd will be */
+				/* useable at a time */
+				/* Upper word is bus number, */
+				/* lower word is slot number */
+				/* Default value of 0xFFFFffff turns this */
+				/* off */
 module_param(sd_pci_slot, uint, 0);
 
 
@@ -368,8 +367,8 @@ bcmsdh_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 			SDLX_MSG(("%s: %s: bus %X, slot %X, vend %X, dev %X\n",
 				__FUNCTION__,
 				bcmsdh_chipmatch(pdev->vendor, pdev->device)
-				?"Found compatible SDIOHC"
-				:"Probing unknown device",
+				? "Found compatible SDIOHC"
+				: "Probing unknown device",
 				pdev->bus->number, PCI_SLOT(pdev->devfn), pdev->vendor,
 				pdev->device));
 			return -ENODEV;
@@ -377,8 +376,8 @@ bcmsdh_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		SDLX_MSG(("%s: %s: bus %X, slot %X, vendor %X, device %X (good PCI location)\n",
 			__FUNCTION__,
 			bcmsdh_chipmatch(pdev->vendor, pdev->device)
-			?"Using compatible SDIOHC"
-			:"WARNING, forced use of unkown device",
+			? "Using compatible SDIOHC"
+			: "WARNING, forced use of unkown device",
 			pdev->bus->number, PCI_SLOT(pdev->devfn), pdev->vendor, pdev->device));
 	}
 
@@ -580,8 +579,6 @@ static irqreturn_t wlan_oob_irq(int irq, void *dev_id)
 		return IRQ_HANDLED;
 	}
 
-	WAKE_LOCK_TIMEOUT(dhdp, WAKE_LOCK_TMOUT, 25);
-
 	dhdsdio_isr((void *)dhdp->bus);
 
 	return IRQ_HANDLED;
@@ -594,7 +591,6 @@ int bcmsdh_register_oob_intr(void * dhdp)
 	SDLX_MSG(("%s Enter\n", __FUNCTION__));
 
 	dev_set_drvdata(sdhcinfo->dev, dhdp);
-
 
 	/* Refer to customer Host IRQ docs about proper irqflags definition */
 	error = request_irq(sdhcinfo->oob_irq, wlan_oob_irq, sdhcinfo->oob_flags,
