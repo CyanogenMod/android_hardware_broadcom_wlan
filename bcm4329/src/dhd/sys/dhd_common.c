@@ -1,7 +1,7 @@
 /*
  * Broadcom Dongle Host Driver (DHD), common DHD core.
  *
- * Copyright (C) 1999-2009, Broadcom Corporation
+ * Copyright (C) 1999-2010, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_common.c,v 1.5.6.8.2.6.6.37 2009/10/22 14:47:18 Exp $
+ * $Id: dhd_common.c,v 1.5.6.8.2.6.6.41 2010/02/24 01:52:41 Exp $
  */
 #include <typedefs.h>
 #include <osl.h>
@@ -79,7 +79,7 @@ const bcm_iovar_t dhd_iovars[] = {
 	{"version", 	IOV_VERSION,	0,	IOVT_BUFFER,	sizeof(dhd_version) },
 #ifdef DHD_DEBUG
 	{"msglevel",	IOV_MSGLEVEL,	0,	IOVT_UINT32,	0 },
-#endif
+#endif /* DHD_DEBUG */
 	{"bcmerrorstr", IOV_BCMERRORSTR, 0, IOVT_BUFFER,	BCME_STRLEN },
 	{"bcmerror",	IOV_BCMERROR,	0,	IOVT_INT8,	0 },
 	{"wdtick",	IOV_WDTICK, 0,	IOVT_UINT32,	0 },
@@ -101,16 +101,8 @@ dhd_common_init(void)
 	 * first time that the driver is initialized vs subsequent initializations.
 	 */
 	dhd_msg_level = DHD_ERROR_VAL;
-#ifdef CONFIG_BCM4329_FW_PATH
-	strncpy(fw_path, CONFIG_BCM4329_FW_PATH, MOD_PARAM_PATHLEN-1);
-#else
 	fw_path[0] = '\0';
-#endif
-#ifdef CONFIG_BCM4329_NVRAM_PATH
-	strncpy(nv_path, CONFIG_BCM4329_NVRAM_PATH, MOD_PARAM_PATHLEN-1);
-#else
 	nv_path[0] = '\0';
-#endif
 }
 
 static int
@@ -196,6 +188,7 @@ dhd_doiovar(dhd_pub_t *dhd_pub, const bcm_iovar_t *vi, uint32 actionid, const ch
 	case IOV_SVAL(IOV_MSGLEVEL):
 		dhd_msg_level = int_val;
 		break;
+
 
 	case IOV_GVAL(IOV_BCMERRORSTR):
 		strncpy((char *)arg, bcmerrorstr(dhd_pub->bcmerror), BCME_STRLEN);
@@ -553,6 +546,8 @@ wl_show_host_event(wl_event_msg_t *event, void *event_data)
 			event_name = event_names[i].event_name;
 	}
 
+	DHD_EVENT(("EVENT: %s, event ID = %d\n", event_name, event_type));
+
 	if (flags & WLC_EVENT_MSG_LINK)
 		link = TRUE;
 	if (flags & WLC_EVENT_MSG_GROUP)
@@ -890,4 +885,26 @@ wl_event_to_host_order(wl_event_msg_t *evt)
 	evt->auth_type = ntoh32(evt->auth_type);
 	evt->datalen = ntoh32(evt->datalen);
 	evt->version = ntoh16(evt->version);
+}
+
+void print_buf(void *pbuf, int len, int bytes_per_line)
+{
+	int i, j = 0;
+	unsigned char *buf = pbuf;
+
+	if (bytes_per_line == 0) {
+		bytes_per_line = len;
+	}
+
+	for (i = 0; i < len; i++) {
+		printf("%2.2x", *buf++);
+		j++;
+		if (j == bytes_per_line) {
+			printf("\n");
+			j = 0;
+		} else {
+			printf(":");
+		}
+	}
+	printf("\n");
 }

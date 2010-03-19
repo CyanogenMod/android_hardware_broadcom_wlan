@@ -1,7 +1,7 @@
 /*
  * Common code for dhd utility, hacked from wl utility
  *
- * Copyright (C) 1999-2009, Broadcom Corporation
+ * Copyright (C) 1999-2010, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhdu.c,v 1.52.2.10.2.6.2.11 2009/09/25 00:32:00 Exp $
+ * $Id: dhdu.c,v 1.52.2.10.2.6.2.14 2010/01/19 07:24:15 Exp $
  */
 
 /* For backwards compatibility, the absense of the define 'BWL_NO_FILESYSTEM_SUPPORT'
@@ -71,6 +71,7 @@ static cmd_func_t dhd_pktgen;
 static cmd_func_t dhd_sprom;
 static cmd_func_t dhd_sdreg;
 static cmd_func_t dhd_sd_msglevel, dhd_sd_blocksize, dhd_sd_mode, dhd_sd_reg;
+static cmd_func_t dhd_dma_mode;
 static cmd_func_t dhd_membytes, dhd_download, dhd_upload, dhd_vars, dhd_idleclock, dhd_idletime;
 static cmd_func_t dhd_logstamp;
 
@@ -114,6 +115,8 @@ cmd_t dhd_cmds[] = {
 	"get version information" },
 	{ "msglevel", dhd_msglevel, DHD_GET_VAR, DHD_SET_VAR,
 	"get/set message bits" },
+	{ "wlmsglevel", dhd_varint, DHD_GET_VAR, DHD_SET_VAR,
+	"get/set wl message(in dhd) bits" },
 	{ "bcmerrorstr", dhd_var_getandprintstr, DHD_GET_VAR, -1,
 	"errorstring"},
 	{ "wdtick", dhd_varint, DHD_GET_VAR, DHD_SET_VAR,
@@ -225,8 +228,8 @@ cmd_t dhd_cmds[] = {
 	"g/set blockmode"},
 	{ "sd_ints", dhd_varint, DHD_GET_VAR, DHD_SET_VAR,
 	"g/set client ints"},
-	{ "sd_dma", dhd_varint, DHD_GET_VAR, DHD_SET_VAR,
-	"g/set dma usage"},
+	{ "sd_dma", dhd_dma_mode, DHD_GET_VAR, DHD_SET_VAR,
+	"g/set dma usage: [PIO | SDMA | ADMA1 | ADMA2]"},
 	{ "sd_yieldcpu", dhd_varint, DHD_GET_VAR, DHD_SET_VAR,
 	"allow blocking (yield of CPU) on data xfer"},
 	{ "sd_minyield", dhd_varint, DHD_GET_VAR, DHD_SET_VAR,
@@ -670,6 +673,7 @@ static dbg_msg_t dhd_sd_msgs[] = {
 	{SDH_DATA_VAL,	"data"},
 	{SDH_CTRL_VAL,	"control"},
 	{SDH_LOG_VAL,	"log"},
+	{SDH_DMA_VAL,	"dma"},
 	{0,		NULL}
 };
 
@@ -757,6 +761,56 @@ dhd_sd_mode(void *wl, cmd_t *cmd, char **argv)
 			       sdmode == 0 ? "SPI"
 			       : sdmode == 1 ? "SD1"
 				   : sdmode == 2 ? "SD4" : "Unknown");
+		}
+	}
+
+	return (ret);
+}
+
+static int
+dhd_dma_mode(void *wl, cmd_t *cmd, char **argv)
+{
+	int ret;
+	int argc;
+	int dmamode;
+
+	/* arg count */
+	for (argc = 0; argv[argc]; argc++);
+	argc--;
+
+	if (argv[1]) {
+		if (!stricmp(argv[1], "pio")) {
+			strcpy(argv[1], "0");
+		} else if (!strcmp(argv[1], "0")) {
+		} else if (!stricmp(argv[1], "dma")) {
+			strcpy(argv[1], "1");
+		} else if (!stricmp(argv[1], "sdma")) {
+			strcpy(argv[1], "1");
+		} else if (!strcmp(argv[1], "1")) {
+		} else if (!stricmp(argv[1], "adma1")) {
+			strcpy(argv[1], "2");
+		} else if (!stricmp(argv[1], "adma")) {
+			strcpy(argv[1], "3");
+		} else if (!stricmp(argv[1], "adma2")) {
+			strcpy(argv[1], "3");
+		} else {
+			return USAGE_ERROR;
+		}
+
+		ret = dhd_var_setint(wl, cmd, argv);
+
+	} else {
+		if ((ret = dhd_var_get(wl, cmd, argv))) {
+			return (ret);
+		} else {
+			dmamode = *(int32*)buf;
+
+			printf("DMA Mode is: %s\n",
+			       dmamode == 0 ? "PIO"
+			       : dmamode == 1 ? "SDMA"
+			       : dmamode == 2 ? "ADMA1"
+			       : dmamode == 3 ? "ADMA2"
+			       : "Unknown");
 		}
 	}
 

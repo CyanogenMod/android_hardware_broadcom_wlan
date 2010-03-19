@@ -2,7 +2,7 @@
 # GNUmakefile for dhd/exe
 # (Basically a copy of wl/exe linux portion.)
 #
-# Copyright (C) 1999-2009, Broadcom Corporation
+# Copyright (C) 1999-2010, Broadcom Corporation
 # 
 #      Unless you and Broadcom execute a separate written software license
 # agreement governing use of this software, this software is licensed to you
@@ -49,7 +49,7 @@ CFLAGS += -DBCMSPI
 #-----------------------------------------------------------
 # Linux build
 #
-ifneq ($(findstring $(TARGETENV), "linux linuxmips linuxmips_be linuxarm linuxarm_le android"),)
+ifneq ($(findstring $(TARGETENV), "linux linuxmips linuxmips_be linuxarm linuxarm_le linuxarm_omap android"),)
 
 # $(TARGETARCH) is set based on TARGETENV in src/Makerules.* files
 DHD_OBJS := dhdu.o dhdu_linux.o bcmutils.o miniopt.o
@@ -62,6 +62,10 @@ endif
 
 # extra warnings
 CFLAGS += -Wextra $(CUSTOM_FLAGS)
+
+ifeq ($(TARGETENV), linuxarm_omap)
+CFLAGS += -DBGBRD
+endif
 
 vpath %.c $(SRCBASE)/shared
 

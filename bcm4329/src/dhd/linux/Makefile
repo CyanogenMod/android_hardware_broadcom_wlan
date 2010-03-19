@@ -1,7 +1,7 @@
 
 # GNU Makefile for Broadcom Dongle Host Driver
 #
-# Copyright (C) 1999-2009, Broadcom Corporation
+# Copyright (C) 1999-2010, Broadcom Corporation
 # 
 #      Unless you and Broadcom execute a separate written software license
 # agreement governing use of this software, this software is licensed to you
@@ -21,7 +21,7 @@
 # software in any way with any other Broadcom software provided under a license
 # other than the GPL, without Broadcom's express prior written consent.
 #
-# $Id: Makefile,v 1.55.2.6.2.10.6.24 2009/10/22 18:40:45 Exp $
+# $Id: Makefile,v 1.55.2.6.2.10.6.27 2010/02/24 02:54:05 Exp $
 #
 
 # Try a couple of places for LINUXDIR if not specified
@@ -70,7 +70,7 @@ OBJCOPY := $(CROSS_COMPILE)objcopy
 ifeq ($(SRCBASE),)
 SRCBASE := $(shell /bin/pwd)/../..
 endif
-vpath %.c $(SRCBASE)/dhd/sys $(SRCBASE)/shared $(SRCBASE)/bcmsdio/sys $(SRCBASE)/wl/sys
+vpath %.c $(SRCBASE)/dhd/sys $(SRCBASE)/shared $(SRCBASE)/bcmsdio/sys $(SRCBASE)/wl/sys $(SRCBASE)/crypto
 
 ## Initialize DFLAGS
 DFLAGS :=
@@ -211,8 +211,14 @@ ifneq ($(findstring -sdstd-,$(TARGET)-),)
 DFLAGS += -DBCMSDIO -DBCMSDIOH_STD
 CFILES += dhd_sdio.c bcmsdh.c bcmsdstd.c bcmsdstd_linux.c bcmsdh_linux.c
 endif
+ifneq ($(findstring -softap-,-$(TARGET)-),)
+DFLAGS += -DSOFTAP
+CFILES += sha1.c md5.c
+endif
 ifneq ($(findstring -oob-,-$(TARGET)-),)
 DFLAGS += -DOOB_INTR_ONLY
+DFLAGS += -DHW_OOB
+DFLAGS += -DMMC_SDIO_ABORT
 else
 ifneq ($(findstring -sdmmc-,-$(TARGET)-),)
 DFLAGS += -DSDIO_ISR_THREAD
@@ -246,9 +252,13 @@ MODULES := dhd.o
 ifeq ($(BCM_KVER), 2.6)
   ##Kernel module names in 2.6 kernel have .ko suffix
   KMODULES:=dhd.ko
+  ifneq ($(findstring -nexus-,$(TARGET)-),)
+    KMODULES:=bcm4329.ko
+  endif
 else
   KMODULES:=$(MODULES)
 endif
+
 
 # host options
 HOSTCC := $(CC)
@@ -266,7 +276,9 @@ TARGETS := \
 	dhd-cdc-usb dhd-cdc-sdstd \
 	dhd-cdc-sdspi-pci dhd-cdc-sdmmc-gpl dhd-cdc-sdmmc-oob-gpl \
 	dhd-cdc-usb-apsta dhd-cdc-usb-gpl \
-	dhd-cdc-sdstd-apsta
+	dhd-cdc-sdstd-apsta \
+	dhd-cdc-sdmmc-softap-gpl 
+
 
 
 TARGETS += \
@@ -311,9 +323,9 @@ ifneq ($(BCM_KVER), 2.6)
 endif
 	$(MAKE) -C $(OBJDIR) -f $(SRCBASE)/dhd/linux/Makefile SRCBASE=$(SRCBASE) modules
 ifeq ($(BCM_KVER), 2.6)
-	$(OBJCOPY) --strip-unneeded $(OBJDIR)/dhd.ko $(OBJDIR)/dhd.ko.stripped
+	$(OBJCOPY) --strip-unneeded $(OBJDIR)/$(KMODULES) $(OBJDIR)/$(KMODULES).stripped
 else
-	$(OBJCOPY) --strip-unneeded $(OBJDIR)/dhd.o $(OBJDIR)/dhd.o.stripped
+	$(OBJCOPY) --strip-unneeded $(OBJDIR)/$(MODULES) $(OBJDIR)/$(MODULES).stripped
 endif
 
 dep: $(foreach file,$(CFILES),.$(file).depend)
@@ -330,7 +342,7 @@ else
 modules: $(MODULES)
 endif
 
-dhd.o: $(OFILES)
+$(MODULES): $(OFILES)
 	$(LD) $(LDFLAGS) -o $@ $^
 
 ifeq ($(BCM_KVER), 2.6)

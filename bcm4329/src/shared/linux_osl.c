@@ -1,7 +1,7 @@
 /*
  * Linux OS Independent Layer
  *
- * Copyright (C) 1999-2009, Broadcom Corporation
+ * Copyright (C) 1999-2010, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: linux_osl.c,v 1.125.12.3.8.5 2009/10/27 04:43:04 Exp $
+ * $Id: linux_osl.c,v 1.125.12.3.8.6 2009/12/09 01:29:03 Exp $
  */
 
 
@@ -81,7 +81,7 @@ struct osl_info {
 	bcm_mem_link_t *dbgmem_list;
 };
 
-static int16 linuxbcmerrormap[] =  \
+static int16 linuxbcmerrormap[] =
 {	0, 			
 	-EINVAL,		
 	-EINVAL,		
@@ -120,13 +120,16 @@ static int16 linuxbcmerrormap[] =  \
 	-EIO,			
 	-ENODEV,		
 	-EINVAL,		
-	-EINVAL			
+	-EIO,			
+	-EIO,			
+	-EINVAL,		
+	-EINVAL,		
 
 
 
-#if BCME_LAST != -38
+#if BCME_LAST != -41
 #error "You need to add a OS error translation in the linuxbcmerrormap \
-	for new error code defined in bcmuitls.h"
+	for new error code defined in bcmutils.h"
 #endif 
 };
 
@@ -148,10 +151,8 @@ osl_t *
 osl_attach(void *pdev, uint bustype, bool pkttag)
 {
 	osl_t *osh;
-	gfp_t flags;
 
-	flags = (in_atomic()) ? GFP_ATOMIC : GFP_KERNEL;
-	osh = kmalloc(sizeof(osl_t), flags);
+	osh = kmalloc(sizeof(osl_t), GFP_ATOMIC);
 	ASSERT(osh);
 
 	bzero(osh, sizeof(osl_t));
@@ -192,9 +193,9 @@ osl_attach(void *pdev, uint bustype, bool pkttag)
 			STATIC_BUF_TOTAL_LEN))) {
 			printk("can not alloc static buf!\n");
 		}
-		else {
-			/* printk("alloc static buf at %x!\n", (unsigned int)bcm_static_buf); */
-		}
+		else
+			printk("alloc static buf at %x!\n", (unsigned int)bcm_static_buf);
+
 		
 		init_MUTEX(&bcm_static_buf->static_sem);
 
@@ -452,8 +453,8 @@ void*
 osl_malloc(osl_t *osh, uint size)
 {
 	void *addr;
-	gfp_t flags;
 
+	
 	if (osh)
 		ASSERT(osh->magic == OS_HANDLE_MAGIC);
 
@@ -490,8 +491,8 @@ osl_malloc(osl_t *osh, uint size)
 	}
 original:
 #endif 
-	flags = (in_atomic()) ? GFP_ATOMIC : GFP_KERNEL;
-	if ((addr = kmalloc(size, flags)) == NULL) {
+
+	if ((addr = kmalloc(size, GFP_ATOMIC)) == NULL) {
 		if (osh)
 			osh->failed++;
 		return (NULL);
@@ -603,10 +604,8 @@ void *
 osl_pktdup(osl_t *osh, void *skb)
 {
 	void * p;
-	gfp_t flags;
 
-	flags = (in_atomic()) ? GFP_ATOMIC : GFP_KERNEL;
-	if ((p = skb_clone((struct sk_buff*)skb, flags)) == NULL)
+	if ((p = skb_clone((struct sk_buff*)skb, GFP_ATOMIC)) == NULL)
 		return NULL;
 
 	
