@@ -21,7 +21,7 @@
 # software in any way with any other Broadcom software provided under a license
 # other than the GPL, without Broadcom's express prior written consent.
 #
-# $Id: Makefile,v 1.55.2.6.2.10.6.27 2010/02/24 02:54:05 Exp $
+# $Id: Makefile,v 1.55.2.6.2.10.6.28 2010/03/26 21:49:31 Exp $
 #
 
 # Try a couple of places for LINUXDIR if not specified
@@ -160,10 +160,16 @@ ifeq ($(WLTEST),1)
 endif
 
 ifeq ($(CONFIG_NET_RADIO),y)
-CFILES += wl_iw.c bcmwifi.c
+CFILES +=  bcmwifi.c
+	ifeq ($(findstring -cfg-,-$(TARGET)-),)
+	CFILES += wl_iw.c
+	endif
 else
 	ifeq ($(CONFIG_WIRELESS_EXT),y)
-	CFILES += wl_iw.c bcmwifi.c
+	CFILES += bcmwifi.c
+		ifeq ($(findstring -cfg-,-$(TARGET)-),)
+		CFILES += wl_iw.c
+		endif
 	endif
 endif
 
@@ -214,6 +220,10 @@ endif
 ifneq ($(findstring -softap-,-$(TARGET)-),)
 DFLAGS += -DSOFTAP
 CFILES += sha1.c md5.c
+endif
+ifneq ($(findstring -cfg-,-$(TARGET)-),)
+DFLAGS += -DWL_CFG80211
+CFILES += wl_cfg80211.c
 endif
 ifneq ($(findstring -oob-,-$(TARGET)-),)
 DFLAGS += -DOOB_INTR_ONLY
@@ -277,8 +287,8 @@ TARGETS := \
 	dhd-cdc-sdspi-pci dhd-cdc-sdmmc-gpl dhd-cdc-sdmmc-oob-gpl \
 	dhd-cdc-usb-apsta dhd-cdc-usb-gpl \
 	dhd-cdc-sdstd-apsta \
-	dhd-cdc-sdmmc-softap-gpl 
-
+	dhd-cdc-sdmmc-softap-gpl \
+	dhd-cdc-sdmmc-cfg-gpl
 
 
 TARGETS += \
