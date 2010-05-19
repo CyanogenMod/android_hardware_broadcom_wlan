@@ -29,7 +29,7 @@ LOCAL_SRC_FILES := \
 
 LOCAL_MODULE := dhdutil
 LOCAL_CFLAGS := -DSDTEST -DTARGETENV_android -Dlinux -DLINUX -mabi=aapcs-linux
-LOCAL_C_INCLUDES +=$(LOCAL_PATH)/include $(LOCAL_PATH)/../../../../kernel/include
+LOCAL_C_INCLUDES +=$(LOCAL_PATH)/include
 # LOCAL_FORCE_STATIC_EXECUTABLE := true
 # LOCAL_STATIC_LIBRARIES := libc
 LOCAL_SHARED_LIBRARIES := libc
