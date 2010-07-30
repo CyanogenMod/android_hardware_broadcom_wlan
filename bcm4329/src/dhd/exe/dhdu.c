@@ -828,7 +828,7 @@ dhd_sdreg(void *dhd, cmd_t *cmd, char **argv)
 
 	UNUSED_PARAMETER(cmd);
 
-	memset(&sdreg, 0, sizeof(sdreg));
+	bzero(&sdreg, sizeof(sdreg));
 
 	/* arg count */
 	for (argc = 0; argv[argc]; argc++);
@@ -1880,7 +1880,7 @@ dhd_sd_reg(void *dhd, cmd_t *cmd, char **argv)
 	uint argc;
 	void *ptr = NULL;
 
-	memset(&sdreg, 0, sizeof(sdreg));
+	bzero(&sdreg, sizeof(sdreg));
 
 	/* arg count */
 	for (argc = 0; argv[argc]; argc++);
