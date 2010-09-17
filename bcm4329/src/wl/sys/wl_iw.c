@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wl_iw.c,v 1.51.4.9.2.6.4.142 2010/08/20 19:12:47 Exp $
+ * $Id: wl_iw.c,v 1.51.4.9.2.6.4.142.4.13 2010/09/15 03:34:56 Exp $
  */
 
 
@@ -161,7 +161,9 @@ static wlc_ssid_t g_specific_ssid;
 static wlc_ssid_t g_ssid;
 
 static wl_iw_ss_cache_ctrl_t g_ss_cache_ctrl;	
-static volatile uint g_first_broadcast_scan;	
+static volatile uint g_first_broadcast_scan;
+static volatile uint g_first_counter_scans;
+#define MAX_ALLOWED_BLOCK_SCAN_FROM_FIRST_SCAN 3
 
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 0))
@@ -257,6 +259,8 @@ wl_iw_set_scan(
 	union iwreq_data *wrqu,
 	char *extra
 );
+
+#ifndef CSCAN
 static int
 wl_iw_get_scan(
 	struct net_device *dev,
@@ -272,7 +276,7 @@ wl_iw_get_scan_prep(
 	char *extra,
 	short max_size
 );
-
+#endif
 
 static void swap_key_from_BE(
 	        wl_wsec_key_t *key
@@ -1169,7 +1173,7 @@ wl_iw_set_pno_set(
 #ifdef PNO_SET_DEBUG
 	int i;
 	char pno_in_example[] = {'P', 'N', 'O', 'S', 'E', 'T', 'U', 'P', ' ', \
-							'S', 0x01, 0x00, 0x00,
+							'S', 0x01, 0x01, 0x00,
 							'S',
 							0x04,
 							'B', 'R', 'C', 'M',
@@ -1177,7 +1181,8 @@ wl_iw_set_pno_set(
 							0x04,
 							'G', 'O', 'O', 'G',
 							'T',
-							0x0A,
+							0x00,
+							0x0A
 							};
 #endif
 
@@ -1243,7 +1248,7 @@ wl_iw_set_pno_set(
 					if ((res = wl_iw_parse_data_tlv(&str_ptr, \
 						&pno_time, \
 						sizeof(pno_time), \
-						type, sizeof(char), &tlv_size_left)) == -1) {
+						type, sizeof(short), &tlv_size_left)) == -1) {
 							WL_ERROR(("%s return %d\n", \
 							__FUNCTION__, res));
 							goto exit_proc;
@@ -1416,6 +1421,7 @@ wl_iw_control_wl_off(
 		g_scan_specified_ssid = 0;
 
 		g_first_broadcast_scan = BROADCAST_SCAN_FIRST_IDLE;
+		g_first_counter_scans = 0;
 #endif
 
 #if defined(BCMLXSDMMC)
@@ -2370,6 +2376,7 @@ wl_iw_mlme(
 }
 #endif 
 
+#ifndef WL_IW_USE_ISCAN
 static int
 wl_iw_get_aplist(
 	struct net_device *dev,
@@ -2445,6 +2452,7 @@ wl_iw_get_aplist(
 	}
 	return 0;
 }
+#endif
 
 #ifdef WL_IW_USE_ISCAN
 static int
@@ -2470,7 +2478,8 @@ wl_iw_iscan_get_aplist(
 		return -EINVAL;
 
 	if ((!iscan) || (iscan->sysioc_pid < 0)) {
-		return wl_iw_get_aplist(dev, info, dwrq, extra);
+		WL_ERROR(("%s error\n", __FUNCTION__));
+		return 0;
 	}
 
 	buf = iscan->list_hdr;
@@ -2561,8 +2570,11 @@ wl_iw_iscan(iscan_info_t *iscan, wlc_ssid_t *ssid, uint16 action)
 	WL_SCAN(("bss_type=%d\n", iscan->iscan_ex_params_p->params.bss_type));
 
 	
-	(void) dev_iw_iovar_setbuf(iscan->dev, "iscan", iscan->iscan_ex_params_p, \
-		iscan->iscan_ex_param_size, iscan->ioctlbuf, sizeof(iscan->ioctlbuf));
+	if ((err = dev_iw_iovar_setbuf(iscan->dev, "iscan", iscan->iscan_ex_params_p, \
+		iscan->iscan_ex_param_size, iscan->ioctlbuf, sizeof(iscan->ioctlbuf)))) {
+			WL_ERROR(("Set ISCAN for %s failed with %d\n", __FUNCTION__, err));
+			err = -1;
+	}
 
 	return err;
 }
@@ -3195,9 +3207,7 @@ wl_iw_iscan_set_scan(
 #endif
 
 	if ((!iscan) || (iscan->sysioc_pid < 0)) {
-		WL_TRACE(("%s use backup if iscan thread is not successful\n", \
-			 __FUNCTION__));
-		ret = wl_iw_set_scan(dev, info, wrqu, extra);
+		WL_ERROR(("%s error\n", __FUNCTION__));
 		goto set_scan_end;
 	}
 
@@ -3216,14 +3226,6 @@ wl_iw_iscan_set_scan(
 		if (wrqu->data.flags & IW_SCAN_THIS_ESSID) {
 			int as = 0;
 			struct iw_scan_req *req = (struct iw_scan_req *)extra;
-#if !defined(CSCAN)
-			if (g_first_broadcast_scan < BROADCAST_SCAN_FIRST_RESULT_CONSUMED) {
-				WL_TRACE(("%s First ISCAN in progress : ignoring SC = %s\n", \
-					 __FUNCTION__, req->essid));
-				ret = -EBUSY;
-				goto set_scan_end;
-			}
-#endif
 			ssid.SSID_len = MIN(sizeof(ssid.SSID), req->essid_len);
 			memcpy(ssid.SSID, req->essid, ssid.SSID_len);
 			ssid.SSID_len = htod32(ssid.SSID_len);
@@ -3242,6 +3244,23 @@ wl_iw_iscan_set_scan(
 		}
 	}
 #endif 
+
+#if !defined(CSCAN)
+	if (g_first_broadcast_scan < BROADCAST_SCAN_FIRST_RESULT_CONSUMED) {
+		if (++g_first_counter_scans == MAX_ALLOWED_BLOCK_SCAN_FROM_FIRST_SCAN) {
+
+			WL_ERROR(("%s Clean up First scan flag which is %d\n", \
+				 __FUNCTION__, g_first_broadcast_scan));
+			g_first_broadcast_scan = BROADCAST_SCAN_FIRST_RESULT_CONSUMED;
+		}
+		else {
+			WL_ERROR(("%s Ignoring Broadcast Scan:First Scan is not done yet %d\n", \
+					__FUNCTION__, g_first_counter_scans));
+			ret = -EBUSY;
+			goto set_scan_end;
+		}
+	}
+#endif
 
 	wl_iw_iscan_set_scan_broadcast_prep(dev, 0);
 
@@ -3399,6 +3418,7 @@ wl_iw_handle_scanresults_ies(char **event_p, char *end,
 	return 0;
 }
 
+#ifndef CSCAN
 static uint
 wl_iw_get_scan_prep(
 	wl_scan_results_t *list,
@@ -3555,7 +3575,6 @@ wl_iw_get_scan(
 	}
 #endif
 
-
 	if (g_scan_specified_ssid) {
 		
 		list = kmalloc(len, GFP_KERNEL);
@@ -3569,10 +3588,12 @@ wl_iw_get_scan(
 	memset(list, 0, len);
 	list->buflen = htod32(len);
 	if ((error = dev_wlc_ioctl(dev, WLC_SCAN_RESULTS, list, len))) {
-		WL_TRACE(("%s: %s : Scan_results ERROR %d\n", dev->name, __FUNCTION__, len));
+		WL_ERROR(("%s: %s : Scan_results ERROR %d\n", dev->name, __FUNCTION__, error));
 		dwrq->length = len;
-		if (g_scan_specified_ssid)
+		if (g_scan_specified_ssid) {
+			g_scan_specified_ssid = 0;
 			kfree(list);
+		}
 		return 0;
 	}
 	list->buflen = dtoh32(list->buflen);
@@ -3671,6 +3692,7 @@ wl_iw_get_scan(
 	WL_TRACE(("%s return to WE %d bytes APs=%d\n", __FUNCTION__, dwrq->length, list->count));
 	return 0;
 }
+#endif
 
 #if defined(WL_IW_USE_ISCAN)
 static int
@@ -3717,8 +3739,8 @@ wl_iw_iscan_get_scan(
 	}
 
 	if ((!iscan) || (iscan->sysioc_pid < 0)) {
-		WL_TRACE(("%ssysioc_pid\n", __FUNCTION__));
-		return wl_iw_get_scan(dev, info, dwrq, extra);
+		WL_ERROR(("%ssysioc_pid\n", __FUNCTION__));
+		return -EAGAIN;
 	}
 
 #if !defined(CSCAN)
@@ -3850,9 +3872,6 @@ wl_iw_iscan_get_scan(
 	g_first_broadcast_scan = BROADCAST_SCAN_FIRST_RESULT_CONSUMED;
 
 	WL_TRACE(("%s return to WE %d bytes APs=%d\n", __FUNCTION__, dwrq->length, counter));
-
-	if (!dwrq->length)
-		return -EAGAIN;
 
 	return 0;
 }
@@ -5414,7 +5433,7 @@ wl_iw_combined_scan_set(struct net_device *dev, wlc_ssid_t* ssids_local, int nss
 	if ((err = dev_iw_iovar_setbuf(dev, "iscan", iscan->iscan_ex_params_p, \
 			iscan->iscan_ex_param_size, \
 			iscan->ioctlbuf, sizeof(iscan->ioctlbuf)))) {
-			WL_TRACE(("Set ISCAN for %s failed with %d\n", __FUNCTION__, err));
+			WL_ERROR(("Set ISCAN for %s failed with %d\n", __FUNCTION__, err));
 			err = -1;
 	}
 
@@ -5698,9 +5717,18 @@ wl_iw_set_cscan(
 		}
 
 		if (g_first_broadcast_scan < BROADCAST_SCAN_FIRST_RESULT_CONSUMED) {
-			WL_ERROR(("%s First ISCAN in progress : ignoring\n",  __FUNCTION__));
-			res = -EBUSY;
-			goto exit_proc;
+			if (++g_first_counter_scans == MAX_ALLOWED_BLOCK_SCAN_FROM_FIRST_SCAN) {
+
+				WL_ERROR(("%s Clean up First scan flag which is %d\n", \
+						 __FUNCTION__, g_first_broadcast_scan));
+				g_first_broadcast_scan = BROADCAST_SCAN_FIRST_RESULT_CONSUMED;
+			}
+			else {
+				WL_ERROR(("%s Ignoring CSCAN : First Scan is not done yet %d\n", \
+						__FUNCTION__, g_first_counter_scans));
+				res = -EBUSY;
+				goto exit_proc;
+			}
 		}
 
 		res = wl_iw_combined_scan_set(dev, ssids_local, nssid, nchan);
@@ -5869,6 +5897,7 @@ static int set_ap_cfg(struct net_device *dev, struct ap_profile *ap)
 	if (ap_cfg_running == FALSE) {
 
 #ifndef AP_ONLY
+
 		sema_init(&ap_eth_sema, 0);
 
 		mpc = 0;
@@ -7217,6 +7246,8 @@ wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data)
 	uint32 datalen = ntoh32(e->datalen);
 	uint32 status =  ntoh32(e->status);
 	uint32 toto;
+	static uint32 roam_no_success = 0;
+	static bool roam_no_success_send = FALSE;
 
 	memset(&wrqu, 0, sizeof(wrqu));
 	memset(extra, 0, sizeof(extra));
@@ -7282,12 +7313,24 @@ wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data)
 		break;
 	case WLC_E_ROAM:
 		if (status != WLC_E_STATUS_SUCCESS) {
-			WL_ERROR(("ROAMING did not succeeded, keep status Quo\n"));
-			goto wl_iw_event_end;
+			roam_no_success++;
+			if ((roam_no_success == 3) && (roam_no_success_send == FALSE)) {
+
+				roam_no_success_send = TRUE;
+				bzero(wrqu.addr.sa_data, ETHER_ADDR_LEN);
+				bzero(&extra, ETHER_ADDR_LEN);
+				cmd = SIOCGIWAP;
+				WL_ERROR(("%s  ROAMING did not succeeded , send Link Down\n", \
+					__FUNCTION__));
+			} else {
+				WL_TRACE(("##### ROAMING did not succeeded %d\n", roam_no_success));
+				goto wl_iw_event_end;
+			}
+		} else {
+			memcpy(wrqu.addr.sa_data, &e->addr.octet, ETHER_ADDR_LEN);
+			wrqu.addr.sa_family = ARPHRD_ETHER;
+			cmd = SIOCGIWAP;
 		}
-		memcpy(wrqu.addr.sa_data, &e->addr.octet, ETHER_ADDR_LEN);
-		wrqu.addr.sa_family = ARPHRD_ETHER;
-		cmd = SIOCGIWAP;
 		break;
 	case WLC_E_DEAUTH_IND:
 	case WLC_E_DISASSOC_IND:
@@ -7343,6 +7386,8 @@ wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data)
 				wl_iw_send_priv_event(priv_dev, "AP_UP");
 			} else {
 				WL_TRACE(("STA_LINK_UP\n"));
+				roam_no_success_send = FALSE;
+				roam_no_success = 0;
 			}
 #endif
 			WL_TRACE(("Link UP\n"));
@@ -7750,6 +7795,7 @@ int wl_iw_attach(struct net_device *dev, void * dhdp)
 	iscan->dev = dev;
 	iscan->iscan_state = ISCAN_STATE_IDLE;
 	g_first_broadcast_scan = BROADCAST_SCAN_FIRST_IDLE;
+	g_first_counter_scans = 0;
 	g_iscan->scan_flag = 0;
 
 	iscan->timer_ms    = 8000;

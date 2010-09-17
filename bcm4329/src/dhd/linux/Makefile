@@ -21,7 +21,7 @@
 # software in any way with any other Broadcom software provided under a license
 # other than the GPL, without Broadcom's express prior written consent.
 #
-# $Id: Makefile,v 1.55.2.6.2.10.6.40 2010/04/29 23:29:33 Exp $
+# $Id: Makefile,v 1.55.2.6.2.10.6.42 2010/08/20 00:15:16 Exp $
 #
 
 # Try a couple of places for LINUXDIR if not specified
@@ -229,7 +229,7 @@ CFILES += sha1.c md5.c
 endif
 ifneq ($(findstring -nexus-,-$(TARGET)-),)
 DFLAGS += -DOEM_ANDROID -DEMBEDDED_PLATFORM -DARP_OFFLOAD_SUPPORT -DPKT_FILTER_SUPPORT
-DFLAGS += -DOEM_ANDROID
+DFLAGS += -Dlinux
 DFLAGS += -DBCMDBG
 DFLAGS += -DDHD_USE_STATIC_BUF
 DFLAGS += -DCUSTOMER_HW2
@@ -237,6 +237,7 @@ DFLAGS += -DCUSTOM_OOB_GPIO_NUM=152
 DFLAGS += -DOOB_INTR_ONLY
 DFLAGS += -DMMC_SDIO_ABORT
 DFLAGS += -DSOFTAP
+DFLAGS += -DPNO_SUPPORT
 else
 ifneq ($(findstring -oob-,-$(TARGET)-),)
 DFLAGS += -DOOB_INTR_ONLY
