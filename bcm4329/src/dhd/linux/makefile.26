@@ -22,8 +22,13 @@
 # software in any way with any other Broadcom software provided under a license
 # other than the GPL, without Broadcom's express prior written consent.
 #
-# $Id: makefile.26,v 1.1.144.1 2008/05/07 22:53:44 Exp $
+# $Id: makefile.26,v 1.1.144.1.14.1 2010/04/16 20:27:14 Exp $
 
+ifneq ($(findstring -nexus-,-$(TARGET)-),)
+obj-m += bcm4329.o
+bcm4329-objs = $(DHDOFILES)
+else
 obj-m += dhd.o
 dhd-objs = $(DHDOFILES)
+endif
 EXTRA_CFLAGS = $(DHDCFLAGS)

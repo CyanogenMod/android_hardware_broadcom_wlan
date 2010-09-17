@@ -21,7 +21,7 @@
 # software in any way with any other Broadcom software provided under a license
 # other than the GPL, without Broadcom's express prior written consent.
 #
-# $Id: Makefile,v 1.55.2.6.2.10.6.28 2010/03/26 21:49:31 Exp $
+# $Id: Makefile,v 1.55.2.6.2.10.6.42 2010/08/20 00:15:16 Exp $
 #
 
 # Try a couple of places for LINUXDIR if not specified
@@ -161,17 +161,23 @@ endif
 
 ifeq ($(CONFIG_NET_RADIO),y)
 CFILES +=  bcmwifi.c
-	ifeq ($(findstring -cfg-,-$(TARGET)-),)
-	CFILES += wl_iw.c
-	endif
+CFILES += wl_iw.c
 else
 	ifeq ($(CONFIG_WIRELESS_EXT),y)
 	CFILES += bcmwifi.c
-		ifeq ($(findstring -cfg-,-$(TARGET)-),)
-		CFILES += wl_iw.c
-		endif
+	CFILES += wl_iw.c
 	endif
 endif
+ifeq ($(BCM_KVER), 2.6)
+CFG80211_KVER:=$(shell echo $(LINUXVER) | cut -c5-6 | sed 's/3[1-9]/true/')
+ifeq ($(CFG80211_KVER), true)
+	ifeq ($(CONFIG_CFG80211),m)
+	DFLAGS += -DCONFIG_CFG80211
+	CFILES += wl_cfg80211.c
+	endif
+endif
+endif
+
 
 OFILES=$(CFILES:.c=.o)
 
@@ -221,10 +227,18 @@ ifneq ($(findstring -softap-,-$(TARGET)-),)
 DFLAGS += -DSOFTAP
 CFILES += sha1.c md5.c
 endif
-ifneq ($(findstring -cfg-,-$(TARGET)-),)
-DFLAGS += -DWL_CFG80211
-CFILES += wl_cfg80211.c
-endif
+ifneq ($(findstring -nexus-,-$(TARGET)-),)
+DFLAGS += -DOEM_ANDROID -DEMBEDDED_PLATFORM -DARP_OFFLOAD_SUPPORT -DPKT_FILTER_SUPPORT
+DFLAGS += -Dlinux
+DFLAGS += -DBCMDBG
+DFLAGS += -DDHD_USE_STATIC_BUF
+DFLAGS += -DCUSTOMER_HW2
+DFLAGS += -DCUSTOM_OOB_GPIO_NUM=152
+DFLAGS += -DOOB_INTR_ONLY
+DFLAGS += -DMMC_SDIO_ABORT
+DFLAGS += -DSOFTAP
+DFLAGS += -DPNO_SUPPORT
+else
 ifneq ($(findstring -oob-,-$(TARGET)-),)
 DFLAGS += -DOOB_INTR_ONLY
 DFLAGS += -DHW_OOB
@@ -232,6 +246,7 @@ DFLAGS += -DMMC_SDIO_ABORT
 else
 ifneq ($(findstring -sdmmc-,-$(TARGET)-),)
 DFLAGS += -DSDIO_ISR_THREAD
+endif
 endif
 endif
 ifneq ($(findstring -sdmmc-,-$(TARGET)-),)
@@ -251,6 +266,13 @@ CFILES += dhd_sdio.c
 endif
 ifneq ($(findstring -intc1,$(shell echo $(LINUXVER))),)
 DFLAGS += -DSANDGATE2G
+endif
+
+ifeq ($(OEM_ANDROID),1)
+DFLAGS += -DOEM_ANDROID -DEMBEDDED_PLATFORM -DARP_OFFLOAD_SUPPORT -DPKT_FILTER_SUPPORT
+endif
+ifeq ($(OEM_CHROMIUMOS),1)
+DFLAGS += -DOEM_CHROMIUMOS -DEMBEDDED_PLATFORM -DARP_OFFLOAD_SUPPORT -DPKT_FILTER_SUPPORT
 endif
 
 CFLAGS += -fshort-wchar $(DFLAGS) $(WFLAGS) $(IFLAGS) $(CUSTOM_FLAGS)
@@ -284,11 +306,10 @@ endif
 
 TARGETS := \
 	dhd-cdc-usb dhd-cdc-sdstd \
-	dhd-cdc-sdspi-pci dhd-cdc-sdmmc-gpl dhd-cdc-sdmmc-oob-gpl \
+	dhd-cdc-sdspi-pci dhd-cdc-sdmmc-gpl dhd-cdc-sdmmc-oob-gpl dhd-cdc-sdmmc-nexus-gpl\
 	dhd-cdc-usb-apsta dhd-cdc-usb-gpl \
 	dhd-cdc-sdstd-apsta \
-	dhd-cdc-sdmmc-softap-gpl \
-	dhd-cdc-sdmmc-cfg-gpl
+	dhd-cdc-sdmmc-softap-gpl
 
 
 TARGETS += \
@@ -335,7 +356,7 @@ endif
 ifeq ($(BCM_KVER), 2.6)
 	$(OBJCOPY) --strip-unneeded $(OBJDIR)/$(KMODULES) $(OBJDIR)/$(KMODULES).stripped
 else
-	$(OBJCOPY) --strip-unneeded $(OBJDIR)/$(MODULES) $(OBJDIR)/$(MODULES).stripped
+	$(OBJCOPY) --strip-unneeded $(OBJDIR)/dhd.o $(OBJDIR)/dhd.o.stripped
 endif
 
 dep: $(foreach file,$(CFILES),.$(file).depend)
