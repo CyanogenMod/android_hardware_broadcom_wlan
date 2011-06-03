@@ -13,30 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-LOCAL_PATH := $(call my-dir)
 
 ########################
 
-include $(CLEAR_VARS)
-LOCAL_MODULE := fw_bcmdhd.bin
-LOCAL_MODULE_CLASS := ETC
-#LOCAL_MODULE_PATH := $(TARGET_OUT_ETC)/firmware
-LOCAL_MODULE_PATH := $(TARGET_OUT)/vendor/firmware
-LOCAL_MODULE_TAGS := optional
-ifeq ($(BOARD_WLAN_DEVICE_REV),bcm4330b1)
-LOCAL_SRC_FILES := fw_bcm4330_b1.bin
+ifeq ($(BOARD_WLAN_DEVICE_REV),bcm4330_b1)
+BCM_FW_SRC_FILES := fw_bcm4330_b1.bin
 else
-LOCAL_SRC_FILES := fw_bcm4330_b2.bin
+BCM_FW_SRC_FILES := fw_bcm4330_b2.bin
 endif
-include $(BUILD_PREBUILT)
 
-########################
-
-#include $(CLEAR_VARS)
-#LOCAL_MODULE := fw_bcmdhd_apsta.bin
-#LOCAL_MODULE_CLASS := ETC
-#LOCAL_MODULE_PATH := $(TARGET_OUT)/vendor/firmware
-#LOCAL_SRC_FILES := $(LOCAL_MODULE)
-#include $(BUILD_PREBUILT)
+PRODUCT_COPY_FILES += \
+    hardware/broadcom/wlan/bcmdhd/firmware/bcm4330/$(BCM_FW_SRC_FILES):system/vendor/firmware/fw_bcmdhd.bin
 
 ########################
