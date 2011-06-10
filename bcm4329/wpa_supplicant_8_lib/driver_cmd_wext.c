@@ -293,7 +293,7 @@ int wpa_driver_wext_driver_cmd( void *priv, char *cmd, char *buf, size_t buf_len
 		os_snprintf(cmd, MAX_DRV_CMD_SIZE, "COUNTRY %s",
 			wpa_driver_get_country_code(no_of_chan));
 	} else if (os_strcasecmp(cmd, "STOP") == 0) {
-		(void)linux_set_iface_flags(drv->ioctl_sock, drv->ifname, 0);
+		linux_set_iface_flags(drv->ioctl_sock, drv->ifname, 0);
 	} else if( os_strcasecmp(cmd, "RELOAD") == 0 ) {
 		wpa_printf(MSG_DEBUG,"Reload command");
 		wpa_msg(drv->ctx, MSG_INFO, WPA_EVENT_DRIVER_STATE "HANGED");
@@ -346,6 +346,7 @@ int wpa_driver_wext_driver_cmd( void *priv, char *cmd, char *buf, size_t buf_len
 			ret = strlen(buf);
 		} else if (os_strcasecmp(cmd, "START") == 0) {
 			drv->driver_is_started = TRUE;
+			linux_set_iface_flags(drv->ioctl_sock, drv->ifname, 1);
 			/* os_sleep(0, WPA_DRIVER_WEXT_WAIT_US);
 			wpa_msg(drv->ctx, MSG_INFO, WPA_EVENT_DRIVER_STATE "STARTED"); */
 		} else if (os_strcasecmp(cmd, "STOP") == 0) {
