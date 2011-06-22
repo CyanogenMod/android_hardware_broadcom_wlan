@@ -17,6 +17,12 @@
 #define WPA_PS_ENABLED		0
 #define WPA_PS_DISABLED		1
 
+typedef struct android_wifi_priv_cmd {
+	char *buf;
+	int used_len;
+	int total_len;
+} android_wifi_priv_cmd;
+
 int send_and_recv_msgs(struct wpa_driver_nl80211_data *drv, struct nl_msg *msg,
 		       int (*valid_handler)(struct nl_msg *, void *),
 		       void *valid_data);
@@ -123,6 +129,8 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 {
 	struct i802_bss *bss = priv;
 	struct wpa_driver_nl80211_data *drv = bss->drv;
+	struct ifreq ifr;
+	android_wifi_priv_cmd priv_cmd;
 	int ret = 0;
 
 	wpa_msg(drv->ctx, MSG_INFO, "%s: %s", __func__, cmd);
@@ -157,9 +165,27 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 		char state = cmd[11];
 
 		ret = wpa_driver_set_btcoex_state(state);
-	} else {
-		wpa_printf(MSG_ERROR, "Unsupported command: %s", cmd);
-		ret = -1;
+	} else { /* Use private command */
+		memset(&ifr, 0, sizeof(ifr));
+		memset(&priv_cmd, 0, sizeof(priv_cmd));
+		os_memcpy(buf, cmd, strlen(cmd) + 1);
+		os_strncpy(&ifr.ifr_name, bss->ifname, IFNAMSIZ);
+
+		priv_cmd.buf = buf;
+		priv_cmd.used_len = buf_len;
+		priv_cmd.total_len = buf_len;
+		ifr.ifr_data = &priv_cmd;
+
+		if ((ret = ioctl(drv->ioctl_sock, SIOCDEVPRIVATE + 1, &ifr)) < 0)
+			wpa_printf(MSG_ERROR, "%s: failed to issue private commands\n", __func__);
+		else {
+			ret = 0;
+			if ((os_strcasecmp(cmd, "LINKSPEED") == 0) ||
+			    (os_strcasecmp(cmd, "RSSI") == 0))
+				ret = strlen(buf);
+
+			wpa_printf(MSG_DEBUG, "%s %s len = %d, %d", __func__, buf, ret, strlen(buf));
+		}
 	}
 
 	return ret;
