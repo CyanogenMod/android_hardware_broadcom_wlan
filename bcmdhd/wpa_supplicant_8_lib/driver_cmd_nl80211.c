@@ -169,7 +169,7 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 		memset(&ifr, 0, sizeof(ifr));
 		memset(&priv_cmd, 0, sizeof(priv_cmd));
 		os_memcpy(buf, cmd, strlen(cmd) + 1);
-		os_strncpy(&ifr.ifr_name, bss->ifname, IFNAMSIZ);
+		os_strncpy(ifr.ifr_name, bss->ifname, IFNAMSIZ);
 
 		priv_cmd.buf = buf;
 		priv_cmd.used_len = buf_len;
