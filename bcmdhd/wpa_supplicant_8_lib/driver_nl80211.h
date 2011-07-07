@@ -119,6 +119,7 @@ struct wpa_driver_nl80211_data {
 
 	int monitor_sock;
 	int monitor_ifidx;
+	int no_monitor_iface_capab;
 	int disable_11b_rates;
 
 	unsigned int pending_remain_on_chan:1;
