@@ -115,7 +115,10 @@ int wpa_driver_wext_combo_scan(void *priv, struct wpa_driver_scan_params *params
 	iwr.u.data.length = bp;
 
 	if ((ret = ioctl(drv->ioctl_sock, SIOCSIWPRIV, &iwr)) < 0) {
-		wpa_printf(MSG_ERROR, "ioctl[SIOCSIWPRIV] (cscan): %d", ret);
+		if (!drv->bgscan_enabled)
+			wpa_printf(MSG_ERROR, "ioctl[SIOCSIWPRIV] (cscan): %d", ret);
+		else
+			ret = 0;	/* Hide error in case of bg scan */
 	}
 	return ret;
 }
