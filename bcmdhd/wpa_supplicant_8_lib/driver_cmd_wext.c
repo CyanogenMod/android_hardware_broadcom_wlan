@@ -30,6 +30,7 @@
 #include "scan.h"
 
 #include "driver_cmd_wext.h"
+#include "driver_cmd_common.h"
 
 /**
  * wpa_driver_wext_set_scan_timeout - Set scan timeout to report scan completion
@@ -220,7 +221,7 @@ static int wpa_driver_set_backgroundscan_params(void *priv)
 
 	bp = WEXT_PNOSETUP_HEADER_SIZE;
 	os_memcpy(buf, WEXT_PNOSETUP_HEADER, bp);
-	buf[bp++] = 'S';
+	buf[bp++] = WEXT_PNO_TLV_PREFIX;
 	buf[bp++] = WEXT_PNO_TLV_VERSION;
 	buf[bp++] = WEXT_PNO_TLV_SUBVERSION;
 	buf[bp++] = WEXT_PNO_TLV_RESERVED;
@@ -262,7 +263,7 @@ static int wpa_driver_set_backgroundscan_params(void *priv)
 	if (ret < 0) {
 		wpa_printf(MSG_ERROR, "ioctl[SIOCSIWPRIV] (pnosetup): %d", ret);
 		drv->errors++;
-		if (drv->errors > WEXT_NUMBER_SEQUENTIAL_ERRORS) {
+		if (drv->errors > DRV_NUMBER_SEQUENTIAL_ERRORS) {
 			drv->errors = 0;
 			wpa_msg(drv->ctx, MSG_INFO, WPA_EVENT_DRIVER_STATE "HANGED");
 		}
@@ -334,7 +335,7 @@ int wpa_driver_wext_driver_cmd( void *priv, char *cmd, char *buf, size_t buf_len
 	if (ret < 0) {
 		wpa_printf(MSG_ERROR, "%s failed (%d): %s", __func__, ret, cmd);
 		drv->errors++;
-		if (drv->errors > WEXT_NUMBER_SEQUENTIAL_ERRORS) {
+		if (drv->errors > DRV_NUMBER_SEQUENTIAL_ERRORS) {
 			drv->errors = 0;
 			wpa_msg(drv->ctx, MSG_INFO, WPA_EVENT_DRIVER_STATE "HANGED");
 		}
