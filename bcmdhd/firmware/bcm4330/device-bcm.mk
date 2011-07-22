@@ -17,12 +17,17 @@
 ########################
 
 ifeq ($(BOARD_WLAN_DEVICE_REV),bcm4330_b1)
-BCM_FW_SRC_FILES := fw_bcm4330_b1.bin
+BCM_FW_SRC_FILE_STA := fw_bcm4330_b1.bin
+BCM_FW_SRC_FILE_AP  := fw_bcm4330_apsta_b1.bin
+BCM_FW_SRC_FILE_P2P := fw_bcm4330_apsta_b1.bin
 else
-BCM_FW_SRC_FILES := fw_bcm4330_b2.bin
+BCM_FW_SRC_FILE_STA := fw_bcm4330_b2.bin
+BCM_FW_SRC_FILE_AP  := fw_bcm4330_apsta_b2.bin
+BCM_FW_SRC_FILE_P2P := fw_bcm4330_p2p_b2.bin
 endif
 
 PRODUCT_COPY_FILES += \
-    hardware/broadcom/wlan/bcmdhd/firmware/bcm4330/$(BCM_FW_SRC_FILES):system/vendor/firmware/fw_bcmdhd.bin
-
+    hardware/broadcom/wlan/bcmdhd/firmware/bcm4330/$(BCM_FW_SRC_FILE_STA):system/vendor/firmware/fw_bcmdhd.bin \
+    hardware/broadcom/wlan/bcmdhd/firmware/bcm4330/$(BCM_FW_SRC_FILE_AP):system/vendor/firmware/fw_bcmdhd_apsta.bin \
+    hardware/broadcom/wlan/bcmdhd/firmware/bcm4330/$(BCM_FW_SRC_FILE_P2P):system/vendor/firmware/fw_bcmdhd_p2p.bin
 ########################
