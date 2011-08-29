@@ -42,23 +42,6 @@ static void wpa_driver_send_hang_msg(struct wpa_driver_nl80211_data *drv)
 	}
 }
 
-static int wpa_driver_set_btcoex_state(char state)
-{
-	int ret;
-	int fd;
-
-	fd = open("/sys/devices/platform/bcmdhd/bt_coex_state", O_RDWR, 0);
-	if (fd == -1)
-		return -1;
-
-	ret = write(fd, &state, sizeof(state));
-	close(fd);
-
-	wpa_printf(MSG_DEBUG, "%s: set btcoex state to '%c' result = %d",
-		__func__, state, ret);
-	return (ret > 0) ? 0 : -1;
-}
-
 static int wpa_driver_set_power_save(void *priv, int state)
 {
 	struct i802_bss *bss = priv;
@@ -262,10 +245,6 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 		} else {
 			wpa_driver_send_hang_msg(drv);
 		}
-	} else if (os_strncasecmp(cmd, "BTCOEXMODE ", 11) == 0) {
-		char state = cmd[11];
-
-		ret = wpa_driver_set_btcoex_state(state);
 	} else { /* Use private command */
 		if (os_strcasecmp(cmd, "BGSCAN-START") == 0) {
 			ret = wpa_driver_set_backgroundscan_params(priv);
