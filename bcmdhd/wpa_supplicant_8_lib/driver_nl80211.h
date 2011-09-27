@@ -128,6 +128,7 @@ struct wpa_driver_nl80211_data {
 	u64 send_action_cookie;
 
 	unsigned int last_mgmt_freq;
+	unsigned int ap_oper_freq;
 
 	struct wpa_driver_scan_filter *filter_ssids;
 	size_t num_filter_ssids;
