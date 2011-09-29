@@ -274,7 +274,8 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 			ret = 0;
 			if ((os_strcasecmp(cmd, "LINKSPEED") == 0) ||
 			    (os_strcasecmp(cmd, "RSSI") == 0) ||
-			    (os_strcasecmp(cmd, "GETBAND") == 0))
+			    (os_strcasecmp(cmd, "GETBAND") == 0) ||
+			    (os_strcasecmp(cmd, "P2P_GET_NOA") == 0))
 				ret = strlen(buf);
 
 			wpa_printf(MSG_DEBUG, "%s %s len = %d, %d", __func__, buf, ret, strlen(buf));
