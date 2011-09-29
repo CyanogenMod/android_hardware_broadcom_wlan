@@ -293,6 +293,24 @@ int wpa_driver_set_p2p_noa(void *priv, u8 count, int start, int duration)
 	return wpa_driver_nl80211_driver_cmd(priv, buf, buf, strlen(buf)+1);
 }
 
+int wpa_driver_get_p2p_noa(void *priv, u8 *buf, size_t len)
+{
+	char rbuf[MAX_DRV_CMD_SIZE];
+	char *cmd = "P2P_GET_NOA";
+	int ret;
+
+	wpa_printf(MSG_DEBUG, "%s: Entry", __func__);
+	os_memset(buf, 0, len);
+	ret = wpa_driver_nl80211_driver_cmd(priv, cmd, rbuf, sizeof(rbuf));
+	if (ret <= 0)
+		return 0;
+	ret >>= 1;
+	if (ret > (int)len)
+		ret = (int)len;
+	hexstr2bin(rbuf, buf, ret);
+	return ret;
+}
+
 int wpa_driver_set_p2p_ps(void *priv, int legacy_ps, int opp_ps, int ctwindow)
 {
 	char buf[MAX_DRV_CMD_SIZE];
