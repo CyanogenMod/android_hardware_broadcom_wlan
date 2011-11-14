@@ -73,7 +73,6 @@ int wpa_driver_wext_combo_scan(void *priv, struct wpa_driver_scan_params *params
 	struct iwreq iwr;
 	int ret, bp;
 	unsigned i;
-	struct wpa_supplicant *wpa_s = (struct wpa_supplicant *)(drv->ctx);
 
 	if (!drv->driver_is_started) {
 		wpa_printf(MSG_DEBUG, "%s: Driver stopped", __func__);
