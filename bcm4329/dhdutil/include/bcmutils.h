@@ -22,6 +22,8 @@
 #ifndef	_bcmutils_h_
 #define	_bcmutils_h_
 
+#include <stddef.h>
+
 #define bcm_strcpy_s(dst, noOfElements, src)            strcpy((dst), (src))
 #define bcm_strncpy_s(dst, noOfElements, src, count)    strncpy((dst), (src), (count))
 #define bcm_strcat_s(dst, noOfElements, src)            strcat((dst), (src))
@@ -527,7 +529,7 @@ extern int bcm_format_ssid(char* buf, const uchar ssid[], uint ssid_len);
 #define	ISPOWEROF2(x)		((((x)-1)&(x)) == 0)
 #define VALID_MASK(mask)	!((mask) & ((mask) + 1))
 #ifndef OFFSETOF
-#define	OFFSETOF(type, member)	((uint)(uintptr)&((type *)0)->member)
+#define	OFFSETOF(type, member)	((uint)offsetof(type, member))
 #endif
 #ifndef ARRAYSIZE
 #define ARRAYSIZE(a)		(sizeof(a)/sizeof(a[0]))
