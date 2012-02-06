@@ -15,7 +15,7 @@
 #include <net/if_arp.h>
 #include <net/if.h>
 
-#include "wireless_copy.h"
+#include "linux_wext.h"
 #include "common.h"
 #include "driver.h"
 #include "eloop.h"
@@ -30,6 +30,9 @@
 #include "scan.h"
 
 #include "driver_cmd_wext.h"
+#ifdef ANDROID
+#include "android_drv.h"
+#endif /* ANDROID */
 
 /**
  * wpa_driver_wext_set_scan_timeout - Set scan timeout to report scan completion
