@@ -20,7 +20,7 @@
 #define WPA_PS_ENABLED		0
 #define WPA_PS_DISABLED		1
 
-#define MAX_WPSP2PIE_CMD_SIZE		384
+#define MAX_WPSP2PIE_CMD_SIZE		512
 
 typedef struct android_wifi_priv_cmd {
 	char *buf;
