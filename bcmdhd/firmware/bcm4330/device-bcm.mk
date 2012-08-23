@@ -18,12 +18,12 @@
 
 ifeq ($(strip $(WIFI_BAND)),802_11_BG)
 BCM_FW_SRC_FILE_STA := fw_bcm4330_bg.bin
-BCM_FW_SRC_FILE_AP  := fw_bcm4330_apsta_bg.bin
-BCM_FW_SRC_FILE_P2P := fw_bcm4330_p2p_bg.bin
+BCM_FW_SRC_FILE_AP  := fw_bcm4330_bg.bin
+BCM_FW_SRC_FILE_P2P := fw_bcm4330_bg.bin
 else
 BCM_FW_SRC_FILE_STA := fw_bcm4330_abg.bin
-BCM_FW_SRC_FILE_AP  := fw_bcm4330_apsta_abg.bin
-BCM_FW_SRC_FILE_P2P := fw_bcm4330_p2p_abg.bin
+BCM_FW_SRC_FILE_AP  := fw_bcm4330_abg.bin
+BCM_FW_SRC_FILE_P2P := fw_bcm4330_abg.bin
 endif
 
 PRODUCT_COPY_FILES += \
