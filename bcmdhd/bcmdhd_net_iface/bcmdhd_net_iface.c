@@ -1,7 +1,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
-#include <linux/in.h>
 #include <net/if.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
