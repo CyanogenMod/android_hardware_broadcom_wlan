@@ -1,19 +1,13 @@
 /*
  * Driver interaction with Linux nl80211/cfg80211
- * Copyright (c) 2002-2010, Jouni Malinen <j@w1.fi>
+ * Copyright (c) 2002-2012, Jouni Malinen <j@w1.fi>
  * Copyright (c) 2003-2004, Instant802 Networks, Inc.
  * Copyright (c) 2005-2006, Devicescape Software, Inc.
  * Copyright (c) 2007, Johannes Berg <johannes@sipsolutions.net>
  * Copyright (c) 2009-2010, Atheros Communications
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #ifndef _DRIVER_NL80211_H_
@@ -31,12 +25,15 @@
 #include <linux/rtnetlink.h>
 #include <netpacket/packet.h>
 #include <linux/filter.h>
+#include <linux/errqueue.h>
 #include "nl80211_copy.h"
 
 #include "common.h"
 #include "eloop.h"
 #include "utils/list.h"
 #include "common/ieee802_11_defs.h"
+#include "common/ieee802_11_common.h"
+#include "l2_packet/l2_packet.h"
 #include "netlink.h"
 #include "linux_ioctl.h"
 #include "radiotap.h"
@@ -97,11 +94,13 @@ struct i802_bss {
 	unsigned int beacon_set:1;
 	unsigned int added_if_into_bridge:1;
 	unsigned int added_bridge:1;
+	unsigned int in_deinit:1;
 
 	u8 addr[ETH_ALEN];
 
 	int freq;
 
+	void *ctx;
 	struct nl_handle *nl_preq, *nl_mgmt;
 	struct nl_cb *nl_cb;
 
@@ -151,6 +150,7 @@ struct wpa_driver_nl80211_data {
 	unsigned int scan_for_auth:1;
 	unsigned int retry_auth:1;
 	unsigned int use_monitor:1;
+	unsigned int ignore_next_local_disconnect:1;
 
 	u64 remain_on_chan_cookie;
 	u64 send_action_cookie;
