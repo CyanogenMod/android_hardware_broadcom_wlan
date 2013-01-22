@@ -3,6 +3,7 @@ config BROADCOM_WIFI
 	tristate "Broadcom WiFi Driver"
 	---help---
 		Select this option to build Broadcom wlan driver
+
 #config BCM_EMBED_FW
 #	default n
 #	bool "Broadcom Embed FW into WiFi Driver"
