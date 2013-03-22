@@ -5,7 +5,7 @@
  *
  * Definitions subject to change without notice.
  *
- * Copyright (C) 1999-2012, Broadcom Corporation
+ * Copyright (C) 1999-2013, Broadcom Corporation
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -19,7 +19,7 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: dhdioctl.h 350488 2012-08-14 04:36:26Z $
+ * $Id: dhdioctl.h 390859 2013-03-14 01:09:31Z $
  */
 
 #ifndef _dhdioctl_h_
@@ -83,7 +83,8 @@ enum {
 #define DHD_ARPOE_VAL	0x4000
 #define DHD_REORDER_VAL	0x8000
 #define DHD_WL_VAL		0x10000
-#define DHD_TRACE2_VAL	0x20000
+#define DHD_NOCHECKDIED_VAL		0x20000 /* UTF WAR */
+#define DHD_WL_VAL2		0x40000
 
 #ifdef SDTEST
 /* For pktgen iovar */

@@ -1,7 +1,7 @@
 #
 # Copyright (C) 2008-2011 Broadcom Corporation
 #
-# $Id: Android.mk,v 2.6 2009-05-07 18:25:15 hharte Exp $
+# $Id: Android.mk,v 2.6 2009-05-07 18:25:15 $
 #
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above

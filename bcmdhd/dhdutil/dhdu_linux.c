@@ -1,7 +1,7 @@
 /*
  * Linux port of dhd command line utility, hacked from wl utility.
  *
- * Copyright (C) 1999-2012, Broadcom Corporation
+ * Copyright (C) 1999-2013, Broadcom Corporation
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: dhdu_linux.c 308298 2012-01-14 01:35:34Z $
+ * $Id: dhdu_linux.c 378962 2013-01-15 13:18:28Z $
  */
 
 #include <stdio.h>
@@ -68,6 +68,7 @@ typedef u_int8_t u8;
 #include <netinet/in.h>
 #include <dhdioctl.h>
 #include "dhdu_common.h"
+#include "dhdu_nl80211.h"
 
 char *av0;
 static int rwl_os_type = LINUX_OS;
@@ -86,12 +87,56 @@ dhd_find_cmd(char* name)
 }
 
 static void
-syserr(char *s)
+syserr(const char *s)
 {
-	fprintf(stderr, "%s: ", dhdu_av0);
+	fprintf(stderr, "%s: ", av0);
 	perror(s);
 	exit(errno);
 }
+
+#ifdef NL80211
+static int __dhd_driver_io(void *dhd, dhd_ioctl_t *ioc)
+{
+	struct dhd_netlink_info dhd_nli;
+	struct ifreq *ifr = (struct ifreq *)dhd;
+	int ret = 0;
+
+	dhd_nli.ifidx = if_nametoindex(ifr->ifr_name);
+	if (!dhd_nli.ifidx) {
+		fprintf(stderr, "invalid device %s\n", ifr->ifr_name);
+		return BCME_IOCTL_ERROR;
+	}
+
+	if (dhd_nl_sock_connect(&dhd_nli) < 0)
+		syserr("socket");
+
+	ret = dhd_nl_do_testmode(&dhd_nli, ioc);
+	dhd_nl_sock_disconnect(&dhd_nli);
+	return ret;
+}
+#else
+static int __dhd_driver_io(void *dhd, dhd_ioctl_t *ioc)
+{
+	struct ifreq *ifr = (struct ifreq *)dhd;
+	int s;
+	int ret = 0;
+
+	/* pass ioctl data */
+	ifr->ifr_data = (caddr_t)ioc;
+
+	/* open socket to kernel */
+	if ((s = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+		syserr("socket");
+
+	ret = ioctl(s, SIOCDEVPRIVATE, ifr);
+	if (ret < 0 && errno != EAGAIN)
+		syserr(__FUNCTION__);
+
+	/* cleanup */
+	close(s);
+	return ret;
+}
+#endif /* NL80211 */
 
 /* This function is called by ioctl_setinformation_fe or ioctl_queryinformation_fe
  * for executing  remote commands or local commands
@@ -99,10 +144,9 @@ syserr(char *s)
 static int
 dhd_ioctl(void *dhd, int cmd, void *buf, int len, bool set)
 {
-	struct ifreq *ifr = (struct ifreq *)dhd;
 	dhd_ioctl_t ioc;
 	int ret = 0;
-	int s;
+
 	/* By default try to execute wl commands */
 	int driver_magic = WLC_IOCTL_MAGIC;
 	int get_magic = WLC_GET_MAGIC;
@@ -117,26 +161,16 @@ dhd_ioctl(void *dhd, int cmd, void *buf, int len, bool set)
 		get_magic = DHD_GET_MAGIC;
 	}
 
-	/* open socket to kernel */
-	if ((s = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-		syserr("socket");
-
 	/* do it */
 	ioc.cmd = cmd;
 	ioc.buf = buf;
 	ioc.len = len;
 	ioc.set = set;
 	ioc.driver = driver_magic;
-	ifr->ifr_data = (caddr_t) &ioc;
 
-	if ((ret = ioctl(s, SIOCDEVPRIVATE, ifr)) < 0) {
-		if (cmd != get_magic) {
-			ret = IOCTL_ERROR;
-		}
-	}
-
-	/* cleanup */
-	close(s);
+	ret = __dhd_driver_io(dhd, &ioc);
+	if (ret < 0 && cmd != get_magic)
+		ret = BCME_IOCTL_ERROR;
 	return ret;
 }
 
@@ -174,9 +208,8 @@ dhd_get_dev_type(char *name, void *buf, char *type)
 	strncpy(ifr.ifr_name, name, IFNAMSIZ);
 	if ((ret = ioctl(s, SIOCETHTOOL, &ifr)) < 0) {
 
-		/* print a good diagnostic if not superuser */
-		if (errno == EPERM)
-			syserr("dhd_get_dev_type");
+		if (errno != EAGAIN)
+			syserr(__FUNCTION__);
 
 		*(char *)buf = '\0';
 	}
@@ -319,7 +352,7 @@ ioctl_queryinformation_fe(void *wl, int cmd, void* input_buf, int *input_len)
 			(unsigned long*)input_len, 0, RDHD_GET_IOCTL);
 	}
 #else /* RWL_ENABLE */
-	return IOCTL_ERROR;
+	return BCME_IOCTL_ERROR;
 #endif /* RWL_ENABLE */
 }
 
@@ -338,7 +371,7 @@ ioctl_setinformation_fe(void *wl, int cmd, void* buf, int *len)
 
 	}
 #else /* RWL_ENABLE */
-	return IOCTL_ERROR;
+	return BCME_IOCTL_ERROR;
 #endif /* RWL_ENABLE */
 }
 
@@ -355,11 +388,11 @@ wl_get(void *wl, int cmd, void *buf, int len)
 	} else {
 		error = (int)ioctl_queryinformation_fe(wl, cmd, buf, &len);
 	}
-	if (error == SERIAL_PORT_ERR)
-		return SERIAL_PORT_ERR;
+	if (error == BCME_SERIAL_PORT_ERR)
+		return BCME_SERIAL_PORT_ERR;
 
 	if (error != 0)
-		return IOCTL_ERROR;
+		return BCME_IOCTL_ERROR;
 
 	return error;
 }
@@ -379,11 +412,11 @@ wl_set(void *wl, int cmd, void *buf, int len)
 		error = (int)ioctl_setinformation_fe(wl, cmd, buf, &len);
 	}
 
-	if (error == SERIAL_PORT_ERR)
-		return SERIAL_PORT_ERR;
+	if (error == BCME_SERIAL_PORT_ERR)
+		return BCME_SERIAL_PORT_ERR;
 
 	if (error != 0) {
-		return IOCTL_ERROR;
+		return BCME_IOCTL_ERROR;
 	}
 	return error;
 }
@@ -506,7 +539,7 @@ main(int argc, char **argv)
 #ifdef RWL_ENABLE
 	if (*argv) {
 		err = process_args(&ifr, argv);
-		if ((err == SERIAL_PORT_ERR) && (remote_type == REMOTE_DONGLE)) {
+		if ((err == BCME_SERIAL_PORT_ERR) && (remote_type == REMOTE_DONGLE)) {
 			DPRINT_ERR(ERR, "\n Retry again\n");
 			err = process_args((struct ifreq*)&ifr, argv);
 		}
@@ -558,17 +591,24 @@ process_args(struct ifreq* ifr, char **argv)
 		    break;
 
 		if (remote_type == NO_REMOTE) {
-		/* use default interface */
+			int ret;
+
+			/* use default interface */
 			if (!ifr->ifr_name[0])
 				dhd_find(ifr, "dhd");
 			/* validate the interface */
-			if (!ifr->ifr_name[0] || dhd_check((void *)ifr)) {
-			if (strcmp("dldn", *argv) != 0) {
-				fprintf(stderr, "%s: dhd driver adapter not found\n", av0);
-				exit(BCME_ERROR);
+			if (!ifr->ifr_name[0]) {
+				if (strcmp("dldn", *argv) != 0) {
+					exit(ENXIO);
+					syserr("interface");
 				}
 			}
-
+			if ((ret = dhd_check((void *)ifr)) != 0) {
+				if (strcmp("dldn", *argv) != 0) {
+					errno = -ret;
+					syserr("dhd_check");
+				}
+			}
 		}
 		/* search for command */
 		cmd = dhd_find_cmd(*argv);
@@ -593,9 +633,9 @@ process_args(struct ifreq* ifr, char **argv)
 		}
 	} else if (!cmd)
 		dhd_usage(NULL);
-	else if (err == USAGE_ERROR)
+	else if (err == BCME_USAGE_ERROR)
 		dhd_cmd_usage(cmd);
-	else if (err == IOCTL_ERROR)
+	else if (err == BCME_IOCTL_ERROR)
 		dhd_printlasterror((void *) ifr);
 
 	return err;

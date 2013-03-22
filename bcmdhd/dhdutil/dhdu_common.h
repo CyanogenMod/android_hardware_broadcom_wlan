@@ -1,7 +1,7 @@
 /*
  * Linux port of dhd command line utility, hacked from wl utility.
  *
- * Copyright (C) 2012, Broadcom Corporation
+ * Copyright (C) 1999-2013, Broadcom Corporation
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: dhdu_common.h 308298 2012-01-14 01:35:34Z $
+ * $Id: dhdu_common.h 379386 2013-01-17 07:20:55Z $
  */
 
 /* Common header file for dhdu_linux.c and dhdu_ndis.c */
@@ -46,7 +46,6 @@
 #define SUCCESS 	1
 #define FAIL   		-1
 #define NO_PACKET       -2
-#define SERIAL_PORT_ERR -3
 
 /* Added for debug utility support */
 #define ERR		stderr

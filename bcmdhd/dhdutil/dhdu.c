@@ -1,7 +1,7 @@
 /*
  * Common code for DHD command-line utility
  *
- * Copyright (C) 1999-2012, Broadcom Corporation
+ * Copyright (C) 1999-2013, Broadcom Corporation
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: dhdu.c 355225 2012-09-05 22:35:10Z $
+ * $Id: dhdu.c 385965 2013-02-19 04:33:34Z $
  */
 
 /* For backwards compatibility, the absence of the define 'BWL_NO_FILESYSTEM_SUPPORT'
@@ -44,24 +44,20 @@
 #include <bcmendian.h>
 #include "dhdu.h"
 #include "miniopt.h"
-/* #include <usbrdl.h> */
 #include <proto/bcmip.h>
+#include <hndrte_debug.h>
+#include <hndrte_armtrap.h>
+#include <hndrte_cons.h>
 #define IPV4_ADDR_LEN 4
-#ifdef WLBTAMP
-#include <proto/bt_amp_hci.h>
-#endif
 
 #include <errno.h>
 
 #include <trxhdr.h>
-/* #include "ucode_download.h"  Greg */
+#include "ucode_download.h"
 
 #define stricmp strcasecmp
 #define strnicmp strncasecmp
 
-#ifndef RDL_CHUNK
-#define RDL_CHUNK	1500
-#endif
 
 static cmd_func_t dhd_var_void;
 static cmd_func_t dhd_varint, dhd_varstr;
@@ -78,7 +74,7 @@ static cmd_func_t dhd_sdreg;
 static cmd_func_t dhd_sd_msglevel, dhd_sd_blocksize, dhd_sd_mode, dhd_sd_reg;
 static cmd_func_t dhd_dma_mode;
 static cmd_func_t dhd_membytes, dhd_download, dhd_dldn,
-	dhd_upload, dhd_vars, dhd_idleclock, dhd_idletime;
+	dhd_upload, dhd_coredump, dhd_consoledump, dhd_vars, dhd_idleclock, dhd_idletime;
 static cmd_func_t dhd_logstamp;
 
 static cmd_func_t dhd_hostreorder_flows;
@@ -86,6 +82,7 @@ static cmd_func_t dhd_hostreorder_flows;
 #ifdef PROP_TXSTATUS
 static cmd_func_t dhd_proptxstatusenable;
 static cmd_func_t dhd_proptxstatusmode;
+static cmd_func_t dhd_proptxopt;
 #endif
 static int dhd_var_getbuf(void *dhd, char *iovar, void *param, int param_len, void **bufptr);
 static int dhd_var_setbuf(void *dhd, char *iovar, void *param, int param_len);
@@ -100,10 +97,6 @@ static int file_size(char *fname);
 static int read_vars(char *fname, char *buf, int buf_maxlen);
 #endif
 
-#ifdef WLBTAMP
-static cmd_func_t wl_HCI_cmd;
-static cmd_func_t wl_HCI_ACL_data;
-#endif
 
 /* dword align allocation */
 static union {
@@ -114,6 +107,9 @@ static char *buf = (char*) &bufstruct_dhd.bufdata;
 
 /* integer output format, default to signed integer */
 static uint8 int_fmt;
+
+#define DEBUG_INFO_PTRS_END 0xffffffff
+const uint32 debug_info_ptrs[] = {0xf8, 0x878, DEBUG_INFO_PTRS_END};
 
 typedef struct {
 	uint value;
@@ -177,7 +173,9 @@ cmd_t dhd_cmds[] = {
 	"logcal <n>  -- log around an osl_delay of <n> usecs"},
 	{ "logstamp", dhd_logstamp, -1, DHD_SET_VAR,
 	"logstamp [<n1>] [<n2>]  -- add a message to the log"},
-	{ "memsize", dhd_varint, DHD_GET_VAR, -1,
+	{ "ramstart", dhd_varint, DHD_GET_VAR, -1,
+	"display start address of onchip SOCRAM"},
+	{ "ramsize", dhd_varint, DHD_GET_VAR, -1,
 	"display size of onchip SOCRAM"},
 	{ "membytes", dhd_membytes, DHD_GET_VAR, DHD_SET_VAR,
 	"membytes [-h | -r | -i] <address> <length> [<data>]\n"
@@ -198,6 +196,13 @@ cmd_t dhd_cmds[] = {
 	{ "vars", dhd_vars, DHD_GET_VAR, DHD_SET_VAR,
 	"vars [<file>]\n"
 	"\toverride SPROM vars with <file> (before download)\n"},
+	{ "coredump", dhd_coredump, -1, -1,
+	"coredump <file>\n"
+	"\tdump dongle RAM content into a file in dumpfile format\n"
+	"\tfor use with ELF core generator"},
+	{ "consoledump", dhd_consoledump, -1, -1,
+	"consoledump\n"
+	"\tdump dongle debug console buffer"},
 	{ "upload", dhd_upload, -1, -1,
 	"upload [-a <address> ] <file> [<size>]\n"
 	"\tupload dongle RAM content into a file\n"
@@ -273,6 +278,8 @@ cmd_t dhd_cmds[] = {
 	"set the divisor for SDIO clock generation"},
 	{ "sd_power", dhd_varint, DHD_GET_VAR, DHD_SET_VAR,
 	"set the SD Card slot power"},
+	{ "sd_power_save", dhd_varint, DHD_GET_VAR, DHD_SET_VAR,
+	"set the SDIO3.0 power save value"},
 	{ "sd_clock", dhd_varint, DHD_GET_VAR, DHD_SET_VAR,
 	"turn on/off the SD Clock"},
 	{ "sd_crc", dhd_varint, DHD_GET_VAR, DHD_SET_VAR,
@@ -291,14 +298,6 @@ cmd_t dhd_cmds[] = {
 	"Move device into or out of reset state (1/reset, or 0/operational)"},
 	{ "ioctl_timeout", dhd_varint, DHD_GET_VAR, DHD_SET_VAR,
 	"IOCTL response timeout (milliseconds)."},
-#ifdef WLBTAMP
-	{ "HCI_cmd", wl_HCI_cmd, -1, DHD_SET_VAR,
-	"carries HCI commands to the driver\n"
-	"\tusage: dhd HCI_cmd <command> <args>\n" },
-	{ "HCI_ACL_data", wl_HCI_ACL_data, -1, DHD_SET_VAR,
-	"carries HCI ACL data packet to the driver\n"
-	"\tusage: dhd HCI_ACL_data <logical link handle> <data>\n" },
-#endif
 #ifdef PROP_TXSTATUS
 	{ "proptx", dhd_proptxstatusenable, DHD_GET_VAR, DHD_SET_VAR,
 	"enable/disable the proptxtstatus feature\n"
@@ -309,6 +308,10 @@ cmd_t dhd_cmds[] = {
 	"0 - Unsupported\n"
 	"1 - Use implied credit from a packet status\n"
 	"2 - Use explicit credit\n" },
+	{ "proptx_opt", dhd_proptxopt, DHD_GET_VAR, DHD_SET_VAR,
+	"enable/disable proptxtstatus optimizations to increase throughput:\n"
+	"0 - Unsupported\n"
+	"1 - Enable proptxstatus optimizations to increase throughput\n" },
 #endif
 	{ "sd_uhsimode", dhd_varint, DHD_GET_VAR, DHD_SET_VAR,
 	"g/set UHSI Mode"},
@@ -318,6 +321,10 @@ cmd_t dhd_cmds[] = {
 	"max glom size for sdio tx\n"},
 	{ "txglommode", dhd_varint, DHD_GET_VAR, DHD_SET_VAR,
 	"glom mode for sdio tx 0- copy, 1- multidescriptor\n"},
+	{ "fw_hang_report", dhd_varint, DHD_GET_VAR, DHD_SET_VAR,
+	"enable/disable report firmware hangs for firmware reload\n"
+	"0 - disabled (for testing)\n"
+	"1 - enabled (default)\n"},
 	{ NULL, NULL, 0, 0, NULL }
 };
 
@@ -437,7 +444,7 @@ dhd_list(void *dhd, cmd_t *garb, char **argv)
 	buf = malloc(len);
 	if (buf == NULL) {
 		fprintf(stderr, "Failed to allocate buffer of %d bytes\n", len);
-		return COMMAND_ERROR;
+		return BCME_NOMEM;
 	}
 	for (i = 0; i < len; i++)
 		*(buf+i) = 0;
@@ -513,11 +520,11 @@ dhd_check(void *dhd)
 	int ret;
 	int val;
 
-	if ((ret = dhd_get(dhd, DHD_GET_MAGIC, &val, sizeof(int)) < 0))
+	if ((ret = dhd_get(dhd, DHD_GET_MAGIC, &val, sizeof(int))) < 0)
 		return ret;
 	if (val != DHD_IOCTL_MAGIC)
 		return -1;
-	if ((ret = dhd_get(dhd, DHD_GET_VERSION, &val, sizeof(int)) < 0))
+	if ((ret = dhd_get(dhd, DHD_GET_VERSION, &val, sizeof(int))) < 0)
 		return ret;
 	if (val > DHD_IOCTL_VERSION) {
 		fprintf(stderr, "Version mismatch, please upgrade\n");
@@ -599,7 +606,7 @@ dhd_pktgen(void *dhd, cmd_t *cmd, char **argv)
 	if (pktgen.version != DHD_PKTGEN_VERSION) {
 		fprintf(stderr, "pktgen version mismatch (module %d app %d)\n",
 		        pktgen.version, DHD_PKTGEN_VERSION);
-		return COMMAND_ERROR;
+		return BCME_ERROR;
 	}
 
 	/* Presence of args implies a set, else a get */
@@ -661,14 +668,14 @@ dhd_pktgen(void *dhd, cmd_t *cmd, char **argv)
 				else {
 					fprintf(stderr, "unrecognized dir mode %s\n",
 					        opts.valstr);
-					return USAGE_ERROR;
+					return BCME_USAGE_ERROR;
 				}
 				break;
 
 			default:
 				fprintf(stderr, "option parsing error (key %s valstr %s)\n",
 				        opts.key, opts.valstr);
-				ret = USAGE_ERROR;
+				ret = BCME_USAGE_ERROR;
 				goto exit;
 			}
 		}
@@ -752,20 +759,20 @@ dhd_sd_blocksize(void *dhd, cmd_t *cmd, char **argv)
 
 	if (argc < 1 || argc > 2) {
 		printf("required args: function [size] (size 0 means max)\n");
-		return USAGE_ERROR;
+		return BCME_USAGE_ERROR;
 	}
 
 	func = strtol(argv[1], &endptr, 0);
 	if (*endptr != '\0') {
 		printf("Invalid function: %s\n", argv[1]);
-		return USAGE_ERROR;
+		return BCME_USAGE_ERROR;
 	}
 
 	if (argc > 1) {
 		size = strtol(argv[2], &endptr, 0);
 		if (*endptr != '\0') {
 			printf("Invalid size: %s\n", argv[1]);
-			return USAGE_ERROR;
+			return BCME_USAGE_ERROR;
 		}
 	}
 
@@ -800,7 +807,7 @@ dhd_sd_mode(void *wl, cmd_t *cmd, char **argv)
 		} else if (!strcmp(argv[1], "sd4")) {
 			strcpy(argv[1], "2");
 		} else {
-			return USAGE_ERROR;
+			return BCME_USAGE_ERROR;
 		}
 
 		ret = dhd_var_setint(wl, cmd, argv);
@@ -848,7 +855,7 @@ dhd_dma_mode(void *wl, cmd_t *cmd, char **argv)
 		} else if (!stricmp(argv[1], "adma2")) {
 			strcpy(argv[1], "3");
 		} else {
-			return USAGE_ERROR;
+			return BCME_USAGE_ERROR;
 		}
 
 		ret = dhd_var_setint(wl, cmd, argv);
@@ -891,13 +898,13 @@ dhd_sdreg(void *dhd, cmd_t *cmd, char **argv)
 	/* required args: offset (will default size) */
 	if (argc < 1) {
 		printf("required args: offset[/size] [value]\n");
-		return USAGE_ERROR;
+		return BCME_USAGE_ERROR;
 	}
 
 	sdreg.offset = strtoul(argv[1], &ptr, 0);
 	if (*ptr && *ptr != '/') {
 		printf("Bad arg: %s\n", argv[1]);
-		return USAGE_ERROR;
+		return BCME_USAGE_ERROR;
 	}
 
 	/* read optional /size */
@@ -905,7 +912,7 @@ dhd_sdreg(void *dhd, cmd_t *cmd, char **argv)
 		sdreg.func = strtol((ptr+1), &ptr, 0);
 		if (*ptr || ((sdreg.func != 2) && sdreg.func != 4)) {
 			printf("Bad size option?\n");
-			return USAGE_ERROR;
+			return BCME_USAGE_ERROR;
 		}
 	}
 	else {
@@ -917,7 +924,7 @@ dhd_sdreg(void *dhd, cmd_t *cmd, char **argv)
 		sdreg.value = strtoul(argv[2], &ptr, 0);
 		if (*ptr) {
 			printf("Bad value: %s\n", argv[2]);
-			return USAGE_ERROR;
+			return BCME_USAGE_ERROR;
 		}
 	}
 
@@ -983,36 +990,36 @@ dhd_membytes(void *dhd, cmd_t *cmd, char **argv)
 	/* required args: address size [<data>]] */
 	if (argc < 2) {
 		fprintf(stderr, "required args: address size [<data>]\n");
-		return USAGE_ERROR;
+		return BCME_USAGE_ERROR;
 	}
 
 	if (argc < 3 && hexin) {
 		fprintf(stderr, "missing <data> required by -h\n");
-		return USAGE_ERROR;
+		return BCME_USAGE_ERROR;
 	}
 	if ((argc > 2) && (rawout)) {
 		fprintf(stderr, "can't have <data> arg with -r\n");
-		return USAGE_ERROR;
+		return BCME_USAGE_ERROR;
 	}
 
 	/* read address */
 	addr = strtoul(argv[0], &ptr, 0);
 	if (*ptr) {
 		fprintf(stderr, "Bad arg: %s\n", argv[0]);
-		return USAGE_ERROR;
+		return BCME_USAGE_ERROR;
 	}
 
 	/* read size */
 	len = strtoul(argv[1], &ptr, 0);
 	if (*ptr) {
 		fprintf(stderr, "Bad value: %s\n", argv[1]);
-		return USAGE_ERROR;
+		return BCME_USAGE_ERROR;
 	}
 
 	align = addr & 0x03;
 	if (align && argc > 2) {
 		fprintf(stderr, "Can only write starting at long-aligned addresses.\n");
-		return USAGE_ERROR;
+		return BCME_USAGE_ERROR;
 	}
 
 	/* get can just use utility function, set must copy custom buffer */
@@ -1044,7 +1051,7 @@ dhd_membytes(void *dhd, cmd_t *cmd, char **argv)
 			char *inptr, *outptr;
 			if (patlen & 1) {
 				fprintf(stderr, "Hex (-h) must consist of whole bytes\n");
-				ret = USAGE_ERROR;
+				ret = BCME_USAGE_ERROR;
 				goto exit;
 			}
 
@@ -1056,7 +1063,7 @@ dhd_membytes(void *dhd, cmd_t *cmd, char **argv)
 				if (!isxdigit(n1) || !isxdigit(n2)) {
 					fprintf(stderr, "invalid hex digit %c\n",
 					        (isxdigit(n1) ? n2 : n1));
-					ret = USAGE_ERROR;
+					ret = BCME_USAGE_ERROR;
 					goto exit;
 				}
 				n1 = isdigit(n1) ? (n1 - '0')
@@ -1116,7 +1123,7 @@ dhd_idletime(void *dhd, cmd_t *cmd, char **argv)
 			idletime = strtol(argv[1], &endptr, 0);
 			if (*endptr != '\0') {
 				fprintf(stderr, "invalid number %s\n", argv[1]);
-				err = -1;
+				err = BCME_USAGE_ERROR;
 			}
 		}
 		if ((idletime < 0) && (idletime != DHD_IDLE_IMMEDIATE)) {
@@ -1165,7 +1172,7 @@ dhd_idleclock(void *dhd, cmd_t *cmd, char **argv)
 			idleclock = strtol(argv[1], &endptr, 0);
 			if (*endptr != '\0') {
 				fprintf(stderr, "invalid number %s\n", argv[1]);
-				err = USAGE_ERROR;
+				err = BCME_USAGE_ERROR;
 			}
 		}
 
@@ -1228,7 +1235,7 @@ dhd_sprom(void *dhd, cmd_t *cmd, char **argv)
 	if (strcmp(argv[0], "srdump") == 0) {
 		if (argc) {
 			fprintf(stderr, "Command srdump doesn't take args\n");
-			return USAGE_ERROR;
+			return BCME_USAGE_ERROR;
 		}
 		offset = 0;
 		words = SPROM_WORDS;
@@ -1241,16 +1248,16 @@ dhd_sprom(void *dhd, cmd_t *cmd, char **argv)
 
 		if (!ISALIGNED((uintptr)bufp, sizeof(uint16))) {
 			fprintf(stderr, "Internal error: unaligned word buffer\n");
-			return COMMAND_ERROR;
+			return BCME_ERROR;
 		}
 	} else {
 		if (strcmp(argv[0], "srwrite") != 0) {
 			fprintf(stderr, "Unimplemented sprom command: %s\n", argv[0]);
-			return USAGE_ERROR;
+			return BCME_USAGE_ERROR;
 		}
 
 		if (argc == 0) {
-			return USAGE_ERROR;
+			return BCME_USAGE_ERROR;
 		} else if ((argc == 1) ||
 		           ((argc == 2) && ((nocrc = !strcmp(argv[1], "-c"))))) {
 
@@ -1258,7 +1265,7 @@ dhd_sprom(void *dhd, cmd_t *cmd, char **argv)
 
 			/* determine and validate file size */
 			if ((ret = file_size(fname)) < 0)
-				return COMMAND_ERROR;
+				return BCME_ERROR;
 
 			bytes = ret;
 			offset = 0;
@@ -1266,7 +1273,7 @@ dhd_sprom(void *dhd, cmd_t *cmd, char **argv)
 
 			if (bytes != 2 * SPROM_WORDS) {
 				fprintf(stderr, "Bad file size\n");
-				return COMMAND_ERROR;
+				return BCME_ERROR;
 			}
 
 			memcpy(bufp, &offset, sizeof(int));
@@ -1276,20 +1283,20 @@ dhd_sprom(void *dhd, cmd_t *cmd, char **argv)
 
 			if (!ISALIGNED((uintptr)bufp, sizeof(uint16))) {
 				fprintf(stderr, "Internal error: unaligned word buffer\n");
-				return COMMAND_ERROR;
+				return BCME_ERROR;
 			}
 
 			if ((fp = fopen(fname, "rb")) == NULL) {
 				fprintf(stderr, "Could not open %s: %s\n",
 				        fname, strerror(errno));
-				return COMMAND_ERROR;
+				return BCME_ERROR;
 			}
 
 			if (fread((uint16*)bufp, sizeof(uint16), words, fp) != words) {
 				fprintf(stderr, "Could not read %d bytes from %s\n",
 				        words * 2, fname);
 				fclose(fp);
-				return COMMAND_ERROR;
+				return BCME_ERROR;
 			}
 
 			fclose(fp);
@@ -1299,7 +1306,7 @@ dhd_sprom(void *dhd, cmd_t *cmd, char **argv)
 				fprintf(stderr, "CRC check failed: 0x%02x, should be 0x%02x.\n",
 				        ((uint8*)bufp)[bytes-1],
 				        ~hndcrc8((uint8*)bufp, bytes - 1, CRC8_INIT_VALUE) & 0xff);
-				return COMMAND_ERROR;
+				return BCME_ERROR;
 			}
 
 			ltoh16_buf(bufp, bytes);
@@ -1307,7 +1314,7 @@ dhd_sprom(void *dhd, cmd_t *cmd, char **argv)
 			offset = strtoul(*++argv, &endptr, 0) * 2;
 			if (*endptr != '\0') {
 				fprintf(stderr, "offset %s is not an integer\n", *argv);
-				return USAGE_ERROR;
+				return BCME_USAGE_ERROR;
 			}
 
 			memcpy(bufp, &offset, sizeof(int));
@@ -1317,18 +1324,18 @@ dhd_sprom(void *dhd, cmd_t *cmd, char **argv)
 
 			if (!ISALIGNED((uintptr)bufp, sizeof(uint16))) {
 				fprintf(stderr, "Internal error: unaligned word buffer\n");
-				return COMMAND_ERROR;
+				return BCME_ERROR;
 			}
 
 			for (words = 0, wordptr = (uint16*)bufp; *++argv; words++) {
 				*wordptr++ = (uint16)strtoul(*argv, &endptr, 0);
 				if (*endptr != '\0') {
 					fprintf(stderr, "value %s is not an integer\n", *argv);
-					return USAGE_ERROR;
+					return BCME_USAGE_ERROR;
 				}
 				if (words > SPROM_WORDS) {
 					fprintf(stderr, "max of %d words\n", SPROM_WORDS);
-					return USAGE_ERROR;
+					return BCME_USAGE_ERROR;
 				}
 			}
 
@@ -1522,7 +1529,7 @@ dhd_verify_file_bytes(void *dhd, uint8 *memblock, int start, uint len)
 	if (ret) {
 		fprintf(stderr, "%s: failed reading %d membytes from 0x%08x\n",
 		__FUNCTION__, len, start);
-		return -1;
+		return ret;
 	}
 
 	src = (uint8 *)memblock;
@@ -1590,13 +1597,10 @@ failed_retry:
 		if (ret) {
 			fprintf(stderr, "%s: error %d on writing %d membytes at 0x%08x\n",
 			        __FUNCTION__, ret, len, start);
-			return -1;
+			return ret;
 		}
 
 		if (verify == TRUE) {
-			if (len & 1)
-				len = ROUNDUP(len, 2);
-
 			if (dhd_verify_file_bytes(dhd, memblock, start, len) != 0) {
 				if (retry++ < 5000)
 				{
@@ -1619,34 +1623,75 @@ static int
 dhd_proptxstatusenable(void *dhd, cmd_t *cmd, char **argv)
 {
 	int flag = 0xdead;
+	int ret;
 
 	if (argv[1]) {
 		flag = atoi(argv[1]);
-		dhd_iovar_setint(dhd, cmd->name, flag);
+		ret = dhd_iovar_setint(dhd, cmd->name, flag);
 	}
 	else {
-		dhd_iovar_getint(dhd, cmd->name, &flag);
-		printf("proptxstatus: %d\n", flag);
+		ret = dhd_iovar_getint(dhd, cmd->name, &flag);
+		if (ret >= 0)
+			printf("proptxstatus: %d\n", flag);
 	}
-	return 0;
+	return ret;
 }
 
 static int
 dhd_proptxstatusmode(void *dhd, cmd_t *cmd, char **argv)
 {
 	int mode = 0xdead;
+	int ret;
 
 	if (argv[1]) {
 		mode = atoi(argv[1]);
-		dhd_iovar_setint(dhd, cmd->name, mode);
+		ret = dhd_iovar_setint(dhd, cmd->name, mode);
 	}
 	else {
-		dhd_iovar_getint(dhd, cmd->name, &mode);
-		printf("proptxstatusmode: %d\n", mode);
+		ret = dhd_iovar_getint(dhd, cmd->name, &mode);
+		if (ret >= 0)
+			printf("proptxstatusmode: %d\n", mode);
 	}
-	return 0;
+	return ret;
 }
+
+static int
+dhd_proptxopt(void *dhd, cmd_t *cmd, char **argv)
+{
+	int flag = 0xdead;
+	int ret;
+
+	if (argv[1]) {
+		flag = atoi(argv[1]);
+		ret = dhd_iovar_setint(dhd, cmd->name, flag);
+	}
+	else {
+		ret = dhd_iovar_getint(dhd, cmd->name, &flag);
+		if (ret >= 0)
+			printf("proptx_opt: %d\n", flag);
+	}
+	return ret;
+}
+
 #endif /* PROP_TXSTATUS */
+
+static int
+dhd_get_ramstart(void *dhd, uint32 *ramstart)
+{
+	int ret;
+	char *ramstart_args[] = {"ramstart", NULL};
+
+	/* Read the bus type the DHD driver is associated to */
+	if ((ret = dhd_var_get(dhd, NULL, ramstart_args)) != BCME_OK) {
+		fprintf(stderr, "%s: error obtaining ramstart\n", __FUNCTION__);
+
+		return ret;
+	}
+
+	*ramstart = *(uint32 *)buf;
+
+	return BCME_OK;
+}
 
 static int
 dhd_download(void *dhd, cmd_t *cmd, char **argv)
@@ -1659,15 +1704,15 @@ dhd_download(void *dhd, cmd_t *cmd, char **argv)
 	bool verify = FALSE;
 	char *fname = NULL;
 	char *vname = NULL;
-	uint32 start = 0;
+	uint32 start;
 	int ret = 0;
 	int fsize;
 	uint32 bustype;
 	long filepos;
 
 	FILE *fp = NULL;
-	uint32 memsize;
-	char *memszargs[] = { "memsize", NULL };
+	uint32 ramsize;
+	char *memszargs[] = { "ramsize", NULL };
 
 	char *bufp;
 
@@ -1681,6 +1726,9 @@ dhd_download(void *dhd, cmd_t *cmd, char **argv)
 	bool embedded_ucode = FALSE;
 
 	UNUSED_PARAMETER(cmd);
+
+	if ((ret = dhd_get_ramstart(dhd, &start)) != BCME_OK)
+		goto exit;
 
 	/* Parse command-line options */
 	miniopt_init(&opts, "download", "", TRUE);
@@ -1788,14 +1836,14 @@ dhd_download(void *dhd, cmd_t *cmd, char **argv)
 
 	if (bustype == BUS_TYPE_SDIO) {
 		if ((ret = dhd_var_get(dhd, NULL, memszargs))) {
-			fprintf(stderr, "%s: error obtaining memsize\n", __FUNCTION__);
+			fprintf(stderr, "%s: error obtaining ramsize\n", __FUNCTION__);
 			goto exit;
 		}
-		memsize = *(uint32*)buf;
+		ramsize = *(uint32*)buf;
 	}
 
 
-	BCM_REFERENCE(memsize);
+	BCM_REFERENCE(ramsize);
 
 	/* do the download reset if not suppressed */
 	if (reset) {
@@ -1805,6 +1853,8 @@ dhd_download(void *dhd, cmd_t *cmd, char **argv)
 			goto exit;
 		}
 	}
+	
+#define RDL_CHUNK	1500  /* size of each dl transfer */
 
 	if (BUS_TYPE_USB == bustype) {
 		/* store the cur pos pointing to base image which should be written */
@@ -1824,10 +1874,9 @@ dhd_download(void *dhd, cmd_t *cmd, char **argv)
 
 
 	/* Load the ram image */
-	if (dhd_load_file_bytes(dhd, cmd, fp, fsize, start, memblock_sz, verify)) {
+	if ((ret = dhd_load_file_bytes(dhd, cmd, fp, fsize, start, memblock_sz, verify))) {
 		fprintf(stderr, "%s: error loading the ramimage at addr 0x%x\n",
 		        __FUNCTION__, start);
-		ret = -1;
 		goto exit;
 	}
 
@@ -1889,7 +1938,6 @@ dhd_download(void *dhd, cmd_t *cmd, char **argv)
 		}
 	}
 	if (embedded_ucode) {
-/* GREG remove */	
 	}
 
 exit:
@@ -1907,13 +1955,13 @@ dhd_dldn(void *dhd, cmd_t *cmd, char **argv)
 	return (-1);
 #else
 	char *fname = NULL;
-	uint32 start = 0;
+	uint32 start;
 	int ret = 0;
 	int fsize;
 	int fd = 0;
 
 	FILE *fp = NULL;
-	uint32 memsize;
+	uint32 ramsize;
 
 	uint len;
 	uint8 memblock[MEMBLOCK];
@@ -1970,11 +2018,11 @@ dhd_dldn(void *dhd, cmd_t *cmd, char **argv)
 		goto exit;
 	}
 
-	memsize = 393216;
+	ramsize = 393216;
 
-	if (memsize && ((uint32)fsize > memsize)) {
+	if (ramsize && ((uint32)fsize > ramsize)) {
 		fprintf(stderr, "%s: file %s too large (%d > %d)\n",
-		        __FUNCTION__, fname, fsize, memsize);
+		        __FUNCTION__, fname, fsize, ramsize);
 		ret = -1;
 		goto exit;
 	}
@@ -1986,6 +2034,9 @@ dhd_dldn(void *dhd, cmd_t *cmd, char **argv)
 		ret = -1;
 		goto exit;
 	}
+
+	if ((ret = dhd_get_ramstart(dhd, &start)) != BCME_OK)
+		goto exit;
 
 	while ((len = fread(memblock, sizeof(uint8), MEMBLOCK, fp))) {
 		if (len < MEMBLOCK && !feof(fp)) {
@@ -2017,7 +2068,7 @@ exit:
 		fclose(fp);
 
 	if (fd)
-		dhd_set(dhd, DHD_DLDN_END, NULL, 0);
+		ret = dhd_set(dhd, DHD_DLDN_END, NULL, 0);
 
 	return ret;
 #endif /* BWL_FILESYSTEM_SUPPORT */
@@ -2030,13 +2081,13 @@ dhd_upload(void *dhd, cmd_t *cmd, char **argv)
 	return (-1);
 #else
 	char *fname = NULL;
-	uint32 start = 0;
+	uint32 start;
 	uint32 size = 0;
 	int ret = 0;
 
 	FILE *fp;
-	uint32 memsize;
-	char *memszargs[] = { "memsize", NULL };
+	uint32 ramsize;
+	char *memszargs[] = { "ramsize", NULL };
 
 	uint len;
 
@@ -2045,6 +2096,9 @@ dhd_upload(void *dhd, cmd_t *cmd, char **argv)
 
 	UNUSED_PARAMETER(cmd);
 	UNUSED_PARAMETER(argv);
+
+	if ((ret = dhd_get_ramstart(dhd, &start)) != BCME_OK)
+		goto exit;
 
 	/* Parse command-line options */
 	miniopt_init(&opts, "upload", "", TRUE);
@@ -2094,20 +2148,13 @@ dhd_upload(void *dhd, cmd_t *cmd, char **argv)
 	}
 
 	if ((ret = dhd_var_get(dhd, NULL, memszargs))) {
-		fprintf(stderr, "%s: error obtaining memsize\n", __FUNCTION__);
+		fprintf(stderr, "%s: error obtaining ramsize\n", __FUNCTION__);
 		goto exit;
 	}
-	memsize = *(uint32*)buf;
+	ramsize = *(uint32*)buf;
 
-	if (!memsize)
-		memsize = start + size;
-
-	if (start + size > memsize) {
-		fprintf(stderr, "%s: %d bytes at 0x%x exceeds ramsize 0x%x\n",
-		        __FUNCTION__, size, start, memsize);
-		ret = -1;
-		goto exit;
-	}
+	if (!ramsize)
+		ramsize = start + size;
 
 	if ((fp = fopen(fname, "wb")) == NULL) {
 		fprintf(stderr, "%s: Could not open %s: %s\n",
@@ -2118,7 +2165,7 @@ dhd_upload(void *dhd, cmd_t *cmd, char **argv)
 
 	/* default size to full RAM */
 	if (!size)
-		size = memsize - start;
+		size = ramsize - start;
 
 	/* read memory and write to file */
 	while (size) {
@@ -2136,7 +2183,7 @@ dhd_upload(void *dhd, cmd_t *cmd, char **argv)
 			break;
 		}
 
-		if (fwrite(ptr, sizeof(*ptr), len, fp) != len) {
+		if (fwrite(ptr, sizeof(char), len, fp) != len) {
 			fprintf(stderr, "%s: error writing to file %s\n", __FUNCTION__, fname);
 			ret = -1;
 			break;
@@ -2147,6 +2194,332 @@ dhd_upload(void *dhd, cmd_t *cmd, char **argv)
 	}
 
 	fclose(fp);
+exit:
+	return ret;
+#endif /* BWL_FILESYSTEM_SUPPORT */
+}
+
+#ifdef BWL_FILESYSTEM_SUPPORT
+static int
+dhd_get_debug_info(void *dhd, hndrte_debug_t *debug_info)
+{
+	int i;
+	int ret;
+	int params[2];
+
+	uint32 *buffer;
+	uint32 debug_info_ptr;
+	uint32 ramstart;
+
+	if ((ret = dhd_get_ramstart(dhd, &ramstart)) != BCME_OK)
+		return ret;
+
+	/*
+	 * Different chips have different fixed debug_info_ptrs
+	 * because of different ROM locations/uses.  Try them all looking
+	 * for the magic number.
+	 */
+	for (i = 0; ; i++) {
+		if (debug_info_ptrs[i] == DEBUG_INFO_PTRS_END) {
+			fprintf(stderr, "Error: cannot find pointer to debug_info\n");
+			return -1;
+		}
+
+		params[0] = debug_info_ptrs[i] + ramstart;
+		params[1] = 8;
+		ret = dhd_var_getbuf(dhd, "membytes", params, 2 * sizeof(int), (void**)&buffer);
+		if ((ret == 0) &&
+		    (*buffer == HNDRTE_DEBUG_PTR_PTR_MAGIC)) {
+			break;
+		}
+	}
+
+	debug_info_ptr = *(buffer + 1);
+	if (debug_info_ptr == 0) {
+		fprintf(stderr, "Error: Debug info pointer is zero\n");
+		return -1;
+	}
+
+	/* Read the area the debuginfoptr points at */
+	params[0] = debug_info_ptr;
+	params[1] = sizeof(hndrte_debug_t);
+	ret = dhd_var_getbuf(dhd, "membytes", params, 2 * sizeof(int), (void**)&buffer);
+	if (ret) {
+		fprintf(stderr, "%s: failed reading %lu membytes from 0x%08lx\n",
+			__FUNCTION__, (long unsigned) params[1], (long unsigned) params[0]);
+		return ret;
+	}
+
+	memcpy((char *) debug_info, buffer, sizeof(hndrte_debug_t));
+
+	/* Sanity check the area */
+	if ((debug_info->magic != HNDRTE_DEBUG_MAGIC) ||
+	    (debug_info->version != HNDRTE_DEBUG_VERSION)) {
+		fprintf(stderr, "Error: Invalid debug info area\n");
+		return -1;
+	}
+
+	return 0;
+}
+#endif /* BWL_FILESYSTEM_SUPPORT */
+
+static int
+dhd_coredump(void *dhd, cmd_t *cmd, char **argv)
+{
+#if !defined(BWL_FILESYSTEM_SUPPORT)
+	return (-1);
+#else
+	char *fname = NULL;
+	int ret;
+
+	FILE *fp;
+
+	hndrte_debug_t debugInfo;
+
+	miniopt_t opts;
+	int opt_err;
+
+	int params[2];
+	char *ptr;
+
+	unsigned int start;
+	unsigned int size;
+
+	prstatus_t prstatus;
+
+	UNUSED_PARAMETER(cmd);
+	UNUSED_PARAMETER(argv);
+
+	/* Parse command-line options */
+	miniopt_init(&opts, "dump", "", TRUE);
+
+	argv++;
+	while ((opt_err = miniopt(&opts, argv)) != -1) {
+		if (opt_err == 1) {
+			fprintf(stderr, "dump options error\n");
+			ret = -1;
+			goto exit;
+		}
+		argv += opts.consumed;
+
+		if (opts.positional) {
+			if (!fname) {
+				fname = opts.valstr;
+			} else {
+				fprintf(stderr, "dump options error\n");
+				ret = -1;
+				goto exit;
+			}
+		} else if (!opts.opt) {
+			fprintf(stderr, "unrecognized option %s\n", opts.valstr);
+			ret = -1;
+			goto exit;
+		} else {
+			fprintf(stderr, "unrecognized option %c\n", opts.opt);
+			ret = -1;
+			goto exit;
+		}
+	}
+
+	/* validate arguments */
+	if (!fname) {
+		fprintf(stderr, "filename required\n");
+		ret = -1;
+		goto exit;
+	}
+
+	if ((ret = dhd_get_debug_info(dhd, &debugInfo)) < 0)
+		goto exit;
+
+	/* Get the base and size to dump */
+	start = debugInfo.ram_base;
+	size = debugInfo.ram_size;
+
+	/* Get the arm trap area */
+	bzero(&prstatus, sizeof(prstatus_t));
+	if (debugInfo.trap_ptr != 0) {
+		int i;
+		trap_t armtrap;
+		uint32 *reg;
+
+		params[0] = debugInfo.trap_ptr;
+		params[1] = sizeof(trap_t);
+		ret = dhd_var_getbuf(dhd, "membytes", params, 2 * sizeof(int), (void**)&ptr);
+		if (ret) {
+			fprintf(stderr, "%s: failed reading %lu membytes from 0x%08lx\n",
+				__FUNCTION__, (long unsigned) params[1], (long unsigned) params[0]);
+			goto exit;
+		}
+
+		memcpy((char *) &armtrap, ptr, sizeof(trap_t));
+
+		/* Populate the prstatus */
+		prstatus.si_signo = armtrap.type;
+		reg = &armtrap.r0;
+		for (i = 0; i < 15; i++, reg++) {
+			prstatus.uregs[i] = *reg;
+		}
+		prstatus.uregs[15] = armtrap.epc;
+	}
+
+	if ((fp = fopen(fname, "wb")) == NULL) {
+		fprintf(stderr, "%s: Could not open %s: %s\n",
+		        __FUNCTION__, fname, strerror(errno));
+		ret = -1;
+		goto exit;
+	}
+
+	/* Write the preamble and debug header */
+	fprintf(fp, "Dump starts for version %s FWID 01-%x\n", debugInfo.epivers, debugInfo.fwid);
+	fprintf(fp, "XXXXXXXXXXXXXXXXXXXX");
+	fprintf(fp, "%8.8lX", (long unsigned) sizeof(debugInfo));
+	if (fwrite(&debugInfo, sizeof(unsigned char), sizeof(debugInfo), fp) != sizeof(debugInfo)) {
+		fprintf(stderr, "%s: error writing to file %s\n", __FUNCTION__, fname);
+		ret = -1;
+		fclose(fp);
+		goto exit;
+	}
+
+	/* Write the prstatus */
+	if (fwrite(&prstatus, sizeof(unsigned char), sizeof(prstatus), fp) != sizeof(prstatus)) {
+		fprintf(stderr, "%s: error writing to file %s\n", __FUNCTION__, fname);
+		ret = -1;
+		fclose(fp);
+		goto exit;
+	}
+
+	/* Write the ram size as another sanity check */
+	fprintf(fp, "%8.8X", size);
+
+	/* read memory and write to file */
+	while (size) {
+		int len;
+		len = MIN(MEMBLOCK, size);
+
+		params[0] = start;
+		params[1] = len;
+		ret = dhd_var_getbuf(dhd, "membytes", params, 2 * sizeof(int), (void**)&ptr);
+		if (ret) {
+			fprintf(stderr, "%s: failed reading %d membytes from 0x%08x\n",
+			        __FUNCTION__, len, start);
+			break;
+		}
+
+		if (fwrite(ptr, sizeof(char), len, fp) != (uint) len) {
+			fprintf(stderr, "%s: error writing to file %s\n", __FUNCTION__, fname);
+			ret = -1;
+			break;
+		}
+
+		start += len;
+		size -= len;
+	}
+
+	fclose(fp);
+exit:
+	return ret;
+#endif /* BWL_FILESYSTEM_SUPPORT */
+}
+
+static int
+dhd_consoledump(void *dhd, cmd_t *cmd, char **argv)
+{
+#if !defined(BWL_FILESYSTEM_SUPPORT)
+	return (-1);
+#else
+	int ret;
+
+	hndrte_debug_t debugInfo;
+
+	miniopt_t opts;
+	int opt_err;
+
+	int params[2];
+	char *ptr;
+
+	unsigned int start;
+	unsigned int size;
+	int len;
+
+	UNUSED_PARAMETER(cmd);
+	UNUSED_PARAMETER(argv);
+
+	/* Parse command-line options */
+	miniopt_init(&opts, "consoledump", "", TRUE);
+
+	argv++;
+	while ((opt_err = miniopt(&opts, argv)) != -1) {
+		if (opt_err == 1) {
+			fprintf(stderr, "dump options error\n");
+			ret = -1;
+			goto exit;
+		}
+		argv += opts.consumed;
+
+		if (!opts.opt) {
+			fprintf(stderr, "unrecognized option %s\n", opts.valstr);
+			ret = -1;
+			goto exit;
+		} else {
+			fprintf(stderr, "unrecognized option %c\n", opts.opt);
+			ret = -1;
+			goto exit;
+		}
+	}
+
+	if ((ret = dhd_get_debug_info(dhd, &debugInfo)) < 0)
+		goto exit;
+
+	if (debugInfo.console <= debugInfo.ram_base) {
+		fprintf(stderr, "%s: console not found\n", __FUNCTION__);
+		ret = -1;
+		goto exit;
+	}
+
+	/* Get the debug console area */
+	params[0] = debugInfo.console;
+	params[1] = sizeof(hndrte_cons_t);
+	ret = dhd_var_getbuf(dhd, "membytes", params, 2 * sizeof(int), (void**)&ptr);
+	if (ret) {
+		fprintf(stderr, "%s: failed reading %lu membytes from 0x%08lx\n",
+			__FUNCTION__, (long unsigned) params[1], (long unsigned) params[0]);
+		goto exit;
+	}
+
+	if (ptr == NULL) {
+		fprintf(stderr, "%s: console not initialised\n", __FUNCTION__);
+		ret = -1;
+		goto exit;
+	}
+
+	start = (unsigned int)((hndrte_cons_t *)ptr)->log.buf;
+	size = ((hndrte_cons_t *)ptr)->log.buf_size;
+
+	if (start <= debugInfo.ram_base) {
+		fprintf(stderr, "%s: console buffer not initialised\n", __FUNCTION__);
+		ret = -1;
+		goto exit;
+	}
+
+	/* read memory and write to file */
+	while (size > 0) {
+		len = MIN(MEMBLOCK, size);
+
+		params[0] = start;
+		params[1] = len;
+		ret = dhd_var_getbuf(dhd, "membytes", params, 2 * sizeof(int), (void**)&ptr);
+		if (ret) {
+			fprintf(stderr, "%s: failed reading %d membytes from 0x%08x\n",
+			        __FUNCTION__, len, start);
+			break;
+		}
+
+		printf("%s", ptr);
+
+		start += len;
+		size -= len;
+	}
+
 exit:
 	return ret;
 #endif /* BWL_FILESYSTEM_SUPPORT */
@@ -2165,13 +2538,13 @@ dhd_logstamp(void *dhd, cmd_t *cmd, char **argv)
 	argc--; argv++;
 
 	if (argc > 2)
-		return USAGE_ERROR;
+		return BCME_USAGE_ERROR;
 
 	if (argc) {
 		valn[0] = strtol(argv[0], &endptr, 0);
 		if (*endptr != '\0') {
 			printf("bad val1: %s\n", argv[0]);
-			return USAGE_ERROR;
+			return BCME_USAGE_ERROR;
 		}
 	}
 
@@ -2179,7 +2552,7 @@ dhd_logstamp(void *dhd, cmd_t *cmd, char **argv)
 		valn[1] = strtol(argv[1], &endptr, 0);
 		if (*endptr != '\0') {
 			printf("bad val2: %s\n", argv[1]);
-			return USAGE_ERROR;
+			return BCME_USAGE_ERROR;
 		}
 	}
 
@@ -2208,29 +2581,29 @@ dhd_sd_reg(void *dhd, cmd_t *cmd, char **argv)
 		argv++;
 		if (argc < 1) {
 			printf("required args: offset [value]\n");
-			return USAGE_ERROR;
+			return BCME_USAGE_ERROR;
 		}
 
 	} else if (!strcmp(cmd->name, "sd_devreg")) {
 		argv++;
 		if (argc < 2) {
 			printf("required args: func offset [value]\n");
-			return USAGE_ERROR;
+			return BCME_USAGE_ERROR;
 		}
 
 		sdreg.func = strtoul(*argv++, &endptr, 0);
 		if (*endptr != '\0') {
 			printf("Invalid function number\n");
-			return USAGE_ERROR;
+			return BCME_USAGE_ERROR;
 		}
 	} else {
-		return USAGE_ERROR;
+		return BCME_USAGE_ERROR;
 	}
 
 	sdreg.offset = strtoul(*argv++, &endptr, 0);
 	if (*endptr != '\0') {
 		printf("Invalid offset value\n");
-		return USAGE_ERROR;
+		return BCME_USAGE_ERROR;
 	}
 
 	/* third arg: value */
@@ -2238,7 +2611,7 @@ dhd_sd_reg(void *dhd, cmd_t *cmd, char **argv)
 		sdreg.value = strtoul(*argv, &endptr, 0);
 		if (*endptr != '\0') {
 			printf("Invalid value\n");
-			return USAGE_ERROR;
+			return BCME_USAGE_ERROR;
 		}
 	}
 
@@ -2404,19 +2777,19 @@ dhd_var_setint(void *dhd, cmd_t *cmd, char **argv)
 
 	if (cmd->set == -1) {
 		printf("set not defined for %s\n", cmd->name);
-		return COMMAND_ERROR;
+		return BCME_ERROR;
 	}
 
 	if (!*argv) {
 		printf("set: missing arguments\n");
-		return USAGE_ERROR;
+		return BCME_USAGE_ERROR;
 	}
 
 	varname = *argv++;
 
 	if (!*argv) {
 		printf("set: missing value argument for set of \"%s\"\n", varname);
-		return USAGE_ERROR;
+		return BCME_USAGE_ERROR;
 	}
 
 	val = strtol(*argv, &endptr, 0);
@@ -2424,7 +2797,7 @@ dhd_var_setint(void *dhd, cmd_t *cmd, char **argv)
 		/* not all the value string was parsed by strtol */
 		printf("set: error parsing value \"%s\" as an integer for set of \"%s\"\n",
 			*argv, varname);
-		return USAGE_ERROR;
+		return BCME_USAGE_ERROR;
 	}
 
 	strcpy(buf, varname);
@@ -2453,14 +2826,14 @@ dhd_var_get(void *dhd, cmd_t *cmd, char **argv)
 
 	if (!*argv) {
 		printf("get: missing arguments\n");
-		return USAGE_ERROR;
+		return BCME_USAGE_ERROR;
 	}
 
 	varname = *argv++;
 
 	if (*argv) {
 		printf("get: error, extra arg \"%s\"\n", *argv);
-		return USAGE_ERROR;
+		return BCME_USAGE_ERROR;
 	}
 
 	strcpy(buf, varname);
@@ -2479,7 +2852,7 @@ dhd_var_getint(void *dhd, cmd_t *cmd, char **argv)
 	int32 val;
 	if (cmd->get == -1) {
 		printf("get not defined for %s\n", cmd->name);
-		return COMMAND_ERROR;
+		return BCME_ERROR;
 	}
 
 	if ((err = dhd_var_get(dhd, cmd, argv)))
@@ -2573,7 +2946,7 @@ dhd_var_void(void *dhd, cmd_t *cmd, char **argv)
 	UNUSED_PARAMETER(argv);
 
 	if (cmd->set < 0)
-		return USAGE_ERROR;
+		return BCME_ERROR;
 
 	return dhd_var_setbuf(dhd, cmd->name, NULL, 0);
 }
@@ -2690,136 +3063,6 @@ dhd_hostreorder_flows(void *dhd, cmd_t *cmd, char **argv)
 }
 
 
-#ifdef WLBTAMP
-
-#define MATCH_OP(op, opstr)	(strlen(op) == strlen(opstr) && strncmp(op, opstr, strlen(op)) == 0)
-
-static int
-wl_HCI_cmd(void *wl, cmd_t *cmd, char **argv)
-{
-	union {
-		char buf[HCI_CMD_PREAMBLE_SIZE + HCI_CMD_DATA_SIZE];
-		uint32 alignme;
-	} cbuf;
-	amp_hci_cmd_t *cpkt = (amp_hci_cmd_t *)&cbuf.buf[0];
-
-	char *op;
-	uint8 plen;
-
-	UNUSED_PARAMETER(cmd);
-
-	if (!*++argv)
-		return USAGE_ERROR;
-
-	/* recognize and encode operations */
-	op = *argv++;
-	if (MATCH_OP(op, "Read_Link_Quality")) {
-		cpkt->opcode = HCI_Read_Link_Quality;
-	} else if (MATCH_OP(op, "Read_Local_AMP_Info")) {
-		cpkt->opcode = HCI_Read_Local_AMP_Info;
-	} else if (MATCH_OP(op, "Read_Local_AMP_ASSOC")) {
-		cpkt->opcode = HCI_Read_Local_AMP_ASSOC;
-	} else if (MATCH_OP(op, "Write_Remote_AMP_ASSOC")) {
-		cpkt->opcode = HCI_Write_Remote_AMP_ASSOC;
-	} else if (MATCH_OP(op, "Create_Physical_Link")) {
-		cpkt->opcode = HCI_Create_Physical_Link;
-	} else if (MATCH_OP(op, "Accept_Physical_Link_Request")) {
-		cpkt->opcode = HCI_Accept_Physical_Link_Request;
-	} else if (MATCH_OP(op, "Disconnect_Physical_Link")) {
-		cpkt->opcode = HCI_Disconnect_Physical_Link;
-	} else if (MATCH_OP(op, "Create_Logical_Link")) {
-		cpkt->opcode = HCI_Create_Logical_Link;
-	} else if (MATCH_OP(op, "Accept_Logical_Link")) {
-		cpkt->opcode = HCI_Accept_Logical_Link;
-	} else if (MATCH_OP(op, "Disconnect_Logical_Link")) {
-		cpkt->opcode = HCI_Disconnect_Logical_Link;
-	} else if (MATCH_OP(op, "Logical_Link_Cancel")) {
-		cpkt->opcode = HCI_Logical_Link_Cancel;
-	} else if (MATCH_OP(op, "Short_Range_Mode")) {
-		cpkt->opcode = HCI_Short_Range_Mode;
-	} else if (MATCH_OP(op, "Read_Connection_Accept_Timeout")) {
-		cpkt->opcode = HCI_Read_Connection_Accept_Timeout;
-	} else if (MATCH_OP(op, "Write_Connection_Accept_Timeout")) {
-		cpkt->opcode = HCI_Write_Connection_Accept_Timeout;
-	} else if (MATCH_OP(op, "Read_Link_Supervision_Timeout")) {
-		cpkt->opcode = HCI_Read_Link_Supervision_Timeout;
-	} else if (MATCH_OP(op, "Write_Link_Supervision_Timeout")) {
-		cpkt->opcode = HCI_Write_Link_Supervision_Timeout;
-	} else if (MATCH_OP(op, "Reset")) {
-		cpkt->opcode = HCI_Reset;
-	} else if (MATCH_OP(op, "Enhanced_Flush")) {
-		cpkt->opcode = HCI_Enhanced_Flush;
-	} else if (MATCH_OP(op, "Read_Best_Effort_Flush_Timeout")) {
-		cpkt->opcode = HCI_Read_Best_Effort_Flush_Timeout;
-	} else if (MATCH_OP(op, "Write_Best_Effort_Flush_Timeout")) {
-		cpkt->opcode = HCI_Write_Best_Effort_Flush_Timeout;
-	} else if (MATCH_OP(op, "Read_Logical_Link_Accept_Timeout")) {
-		cpkt->opcode = HCI_Read_Logical_Link_Accept_Timeout;
-	} else if (MATCH_OP(op, "Write_Logical_Link_Accept_Timeout")) {
-		cpkt->opcode = HCI_Write_Logical_Link_Accept_Timeout;
-	} else if (MATCH_OP(op, "Read_Buffer_Size")) {
-		cpkt->opcode = HCI_Read_Buffer_Size;
-	} else if (MATCH_OP(op, "Read_Data_Block_Size")) {
-		cpkt->opcode = HCI_Read_Data_Block_Size;
-	} else if (MATCH_OP(op, "Set_Event_Mask_Page_2")) {
-		cpkt->opcode = HCI_Set_Event_Mask_Page_2;
-	} else if (MATCH_OP(op, "Flow_Spec_Modify")) {
-		cpkt->opcode = HCI_Flow_Spec_Modify;
-	} else if (MATCH_OP(op, "Read_Local_Version_Info")) {
-		cpkt->opcode = HCI_Read_Local_Version_Info;
-	} else if (MATCH_OP(op, "Read_Local_Supported_Commands")) {
-		cpkt->opcode = HCI_Read_Local_Supported_Commands;
-	} else if (MATCH_OP(op, "Read_Failed_Contact_Counter")) {
-		cpkt->opcode = HCI_Read_Failed_Contact_Counter;
-	} else if (MATCH_OP(op, "Reset_Failed_Contact_Counter")) {
-		cpkt->opcode = HCI_Reset_Failed_Contact_Counter;
-	} else {
-		printf("unsupported HCI command: %s\n", op);
-		return (-1);
-	}
-
-	plen = 0;
-	while (*argv && (plen < HCI_CMD_DATA_SIZE)) {
-		cpkt->parms[plen++] = (uint8)strtol(*argv++, NULL, 0);
-	}
-	cpkt->plen = plen;
-
-	return dhd_var_setbuf(wl, cmd->name, cpkt, HCI_CMD_PREAMBLE_SIZE + plen);
-}
-
-typedef union {
-	uint8 buf[HCI_ACL_DATA_PREAMBLE_SIZE + 2048];
-	uint32 alignme;
-} g_hci_dbuf_t;
-
-static int
-wl_HCI_ACL_data(void *wl, cmd_t *cmd, char **argv)
-{
-	/* Align struct. Also declare static so that large array isn't allocated
-	 * from the stack.
-	 */
-	static g_hci_dbuf_t g_hci_dbuf;
-
-	amp_hci_ACL_data_t *dpkt = (amp_hci_ACL_data_t *)&g_hci_dbuf.buf[0];
-	uint16 dlen;
-
-	if (!*++argv)
-		return USAGE_ERROR;
-
-	/* get logical link handle */
-	dpkt->handle = (HCI_ACL_DATA_BC_FLAGS | HCI_ACL_DATA_PB_FLAGS);
-	dpkt->handle |= (uint16)strtol(*argv++, NULL, 0);
-
-	/* get data */
-	dlen = 0;
-	while (*argv && (dlen < 2048)) {
-		dpkt->data[dlen++] = (uint8)strtol(*argv++, NULL, 0);
-	}
-	dpkt->dlen = dlen;
-
-	return dhd_var_setbuf(wl, cmd->name, dpkt, HCI_ACL_DATA_PREAMBLE_SIZE + dlen);
-}
-#endif /* WLBTAMP */
 
 /* These two utility functions are used by dhdu_linux.c
  * The code is taken from wlu.c.
