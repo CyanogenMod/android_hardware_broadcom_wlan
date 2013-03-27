@@ -33,8 +33,10 @@ WPA_SUPPL_DIR_INCLUDE = $(WPA_SUPPL_DIR)/src \
 	$(WPA_SUPPL_DIR)/src/wps \
 	$(WPA_SUPPL_DIR)/wpa_supplicant
 
+ifeq ($(TARGET_ARCH),arm)
 # To force sizeof(enum) = 4
 L_CFLAGS += -mabi=aapcs-linux
+endif
 
 ifdef CONFIG_ANDROID_LOG
 L_CFLAGS += -DCONFIG_ANDROID_LOG
