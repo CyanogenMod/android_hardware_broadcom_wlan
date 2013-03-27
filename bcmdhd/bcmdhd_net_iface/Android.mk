@@ -24,7 +24,9 @@ LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 LOCAL_SRC_FILES := bcmdhd_net_iface.c
 LOCAL_MODULE := libnetcmdiface
+ifeq ($(TARGET_ARCH),arm)
 LOCAL_CFLAGS := -mabi=aapcs-linux
+endif
 LOCAL_MODULE_TAGS := optional
 LOCAL_ALLOW_UNDEFINED_SYMBOLS := true
 include $(BUILD_SHARED_LIBRARY)
