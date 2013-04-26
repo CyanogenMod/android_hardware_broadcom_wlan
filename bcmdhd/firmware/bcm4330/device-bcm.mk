@@ -15,6 +15,7 @@
 #
 
 ########################
+-include hardware/broadcom/wlan/bcmdhd/config/config-bcm.mk
 
 ifeq ($(strip $(WIFI_BAND)),802_11_BG)
 BCM_FW_SRC_FILE_STA := fw_bcm4330_bg.bin
