@@ -15,12 +15,6 @@
 #
 
 ########################
--include hardware/broadcom/wlan/bcmdhd/config/config-bcm.mk
-
-BCM_FW_SRC_FILE_STA := fw_bcm4324.bin
-BCM_FW_SRC_FILE_AP  := fw_bcm4324.bin
-
 PRODUCT_COPY_FILES += \
-    hardware/broadcom/wlan/bcmdhd/firmware/bcm4324/$(BCM_FW_SRC_FILE_STA):system/vendor/firmware/fw_bcmdhd.bin \
-    hardware/broadcom/wlan/bcmdhd/firmware/bcm4324/$(BCM_FW_SRC_FILE_AP):system/vendor/firmware/fw_bcmdhd_apsta.bin
+    hardware/broadcom/wlan/bcmdhd/config/wpa_supplicant_overlay.conf:system/etc/wifi/wpa_supplicant_overlay.conf
 ########################
