@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+-include hardware/broadcom/wlan/bcmdhd/config/config-bcm.mk
+
 BCM_FW_SRC_FILE_STA := fw_bcmdhd.bin
 BCM_FW_SRC_FILE_AP  := fw_bcmdhd_ap.bin
 
