@@ -37,6 +37,14 @@ int net_iface_send_command_init(void) {
 	}
 }
 
+int net_iface_send_command_fini(void) {
+	if (state.sock >= 0) {
+		close(state.sock);
+		state.sock = -1;
+	}
+	return 0;
+}
+
 /*
  * Arguments:
  *	  argv[2] - wlan interface
