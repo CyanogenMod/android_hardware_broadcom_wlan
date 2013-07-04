@@ -37,6 +37,10 @@ int net_iface_send_command_init(void) {
 	}
 }
 
+int net_iface_send_command_fini(void) {
+	return 0;
+}
+
 /*
  * Arguments:
  *	  argv[2] - wlan interface
