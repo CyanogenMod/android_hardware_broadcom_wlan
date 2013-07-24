@@ -1,9 +1,6 @@
 /*
- * Structure used by apps whose drivers access SDIO drivers.
- * Pulled out separately so dhdu and wlu can both use it.
- *
  * Copyright (C) 1999-2013, Broadcom Corporation
- *
+ * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
  * copyright notice and this permission notice appear in all copies.
@@ -16,37 +13,34 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sdiovar.h 241182 2011-02-17 21:50:03Z $
+ * Fundamental constants relating to 802.3
+ *
+ * $Id: 802.3.h 382882 2013-02-04 23:24:31Z $
  */
 
-#ifndef _sdiovar_h_
-#define _sdiovar_h_
+#ifndef _802_3_h_
+#define _802_3_h_
 
-#include <typedefs.h>
-
-/* require default structure packing */
-#define BWL_DEFAULT_PACKING
+/* This marks the start of a packed structure section. */
 #include <packed_section_start.h>
 
-typedef struct sdreg {
-	int func;
-	int offset;
-	int value;
-} sdreg_t;
+#define SNAP_HDR_LEN	6	/* 802.3 SNAP header length */
+#define DOT3_OUI_LEN	3	/* 802.3 oui length */
 
-/* Common msglevel constants */
-#define SDH_ERROR_VAL		0x0001	/* Error */
-#define SDH_TRACE_VAL		0x0002	/* Trace */
-#define SDH_INFO_VAL		0x0004	/* Info */
-#define SDH_DEBUG_VAL		0x0008	/* Debug */
-#define SDH_DATA_VAL		0x0010	/* Data */
-#define SDH_CTRL_VAL		0x0020	/* Control Regs */
-#define SDH_LOG_VAL		0x0040	/* Enable bcmlog */
-#define SDH_DMA_VAL		0x0080	/* DMA */
+BWL_PRE_PACKED_STRUCT struct dot3_mac_llc_snap_header {
+	uint8	ether_dhost[ETHER_ADDR_LEN];	/* dest mac */
+	uint8	ether_shost[ETHER_ADDR_LEN];	/* src mac */
+	uint16	length;				/* frame length incl header */
+	uint8	dsap;				/* always 0xAA */
+	uint8	ssap;				/* always 0xAA */
+	uint8	ctl;				/* always 0x03 */
+	uint8	oui[DOT3_OUI_LEN];		/* RFC1042: 0x00 0x00 0x00
+						 * Bridge-Tunnel: 0x00 0x00 0xF8
+						 */
+	uint16	type;				/* ethertype */
+} BWL_POST_PACKED_STRUCT;
 
-#define NUM_PREV_TRANSACTIONS	16
-
-
+/* This marks the end of a packed structure section. */
 #include <packed_section_end.h>
 
-#endif /* _sdiovar_h_ */
+#endif	/* #ifndef _802_3_h_ */

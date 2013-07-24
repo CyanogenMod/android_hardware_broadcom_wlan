@@ -1,5 +1,5 @@
 /*
- * BCM common config options
+ * Ucode download related utility functions
  *
  * Copyright (C) 1999-2013, Broadcom Corporation
  * 
@@ -15,9 +15,7 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: bcm_cfg.h 351867 2012-08-21 18:46:16Z $
+ * $Id: ucode_download.h 241182 2011-02-17 21:50:03Z $
  */
-
-#ifndef _bcm_cfg_h_
-#define _bcm_cfg_h_
-#endif /* _bcm_cfg_h_ */
+extern int
+proc_ucode_download(char* fw_filename, void *dev_handle);

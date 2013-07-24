@@ -1,7 +1,7 @@
 /*
  * Command line options parser.
  *
- * Copyright (C) 1999-2011, Broadcom Corporation
+ * Copyright (C) 1999-2013, Broadcom Corporation
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: miniopt.h,v 1.3 2009-01-15 00:06:54 Exp $
+ * $Id: miniopt.h 241182 2011-02-17 21:50:03Z $
  */
 
 

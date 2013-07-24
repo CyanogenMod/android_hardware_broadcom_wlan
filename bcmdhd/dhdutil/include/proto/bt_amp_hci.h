@@ -1,8 +1,8 @@
 /*
  * BT-AMP (BlueTooth Alternate Mac and Phy) HCI (Host/Controller Interface)
  *
- * Copyright (C) 1999-2011, Broadcom Corporation
- *
+ * Copyright (C) 1999-2013, Broadcom Corporation
+ * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
  * copyright notice and this permission notice appear in all copies.
@@ -15,7 +15,7 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: bt_amp_hci.h,v 9.14.8.2 2010-09-10 18:37:47 Exp $
+ * $Id: bt_amp_hci.h 382882 2013-02-04 23:24:31Z $
 */
 
 #ifndef _bt_amp_hci_h
@@ -205,7 +205,6 @@ typedef BWL_PRE_PACKED_STRUCT struct amp_hci_event {
 #define HCI_Short_Range_Mode_Change_Complete_Event_Mask		0x1000
 #define HCI_Status_Change_Event_Mask				0x2000
 #define HCI_All_Event_Mask					0x31e7
-
 /* AMP HCI event parameters */
 typedef BWL_PRE_PACKED_STRUCT struct cmd_status_parms {
 	uint8 status;
