@@ -77,7 +77,8 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 			ret = 0;
 			if ((os_strcasecmp(cmd, "LINKSPEED") == 0) ||
 			    (os_strcasecmp(cmd, "RSSI") == 0) ||
-			    (os_strcasecmp(cmd, "GETBAND") == 0) )
+			    (os_strcasecmp(cmd, "GETBAND") == 0) ||
+			    (os_strncasecmp(cmd, "WLS_BATCHING", 12) == 0))
 				ret = strlen(buf);
 			else if ((os_strncasecmp(cmd, "COUNTRY", 7) == 0) ||
 				 (os_strncasecmp(cmd, "SETBAND", 7) == 0))
