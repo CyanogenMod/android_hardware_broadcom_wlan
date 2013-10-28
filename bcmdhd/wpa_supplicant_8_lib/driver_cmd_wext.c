@@ -115,7 +115,7 @@ int wpa_driver_wext_combo_scan(void *priv, struct wpa_driver_scan_params *params
 	buf[bp++] = (u8)(WEXT_CSCAN_HOME_DWELL_TIME >> 8);
 
 	os_memset(&iwr, 0, sizeof(iwr));
-	os_strncpy(iwr.ifr_name, drv->ifname, IFNAMSIZ);
+	os_strlcpy(iwr.ifr_name, drv->ifname, IFNAMSIZ);
 	iwr.u.data.pointer = buf;
 	iwr.u.data.length = bp;
 
@@ -258,7 +258,7 @@ static int wpa_driver_set_backgroundscan_params(void *priv)
 	bp += WEXT_PNO_MAX_REPEAT_LENGTH + 1;
 
 	os_memset(&iwr, 0, sizeof(iwr));
-	os_strncpy(iwr.ifr_name, drv->ifname, IFNAMSIZ);
+	os_strlcpy(iwr.ifr_name, drv->ifname, IFNAMSIZ);
 	iwr.u.data.pointer = buf;
 	iwr.u.data.length = bp;
 
@@ -293,7 +293,7 @@ int wpa_driver_wext_driver_cmd( void *priv, char *cmd, char *buf, size_t buf_len
 	}
 
 	if (os_strcasecmp(cmd, "RSSI-APPROX") == 0) {
-		os_strncpy(cmd, RSSI_CMD, MAX_DRV_CMD_SIZE);
+		os_strlcpy(cmd, RSSI_CMD, MAX_DRV_CMD_SIZE);
 	} else if( os_strncasecmp(cmd, "SCAN-CHANNELS", 13) == 0 ) {
 		int no_of_chan;
 
@@ -311,15 +311,15 @@ int wpa_driver_wext_driver_cmd( void *priv, char *cmd, char *buf, size_t buf_len
 		if (ret < 0) {
 			return ret;
 		}
-		os_strncpy(cmd, "PNOFORCE 1", MAX_DRV_CMD_SIZE);
+		os_strlcpy(cmd, "PNOFORCE 1", MAX_DRV_CMD_SIZE);
 		drv->bgscan_enabled = 1;
 	} else if( os_strcasecmp(cmd, "BGSCAN-STOP") == 0 ) {
-		os_strncpy(cmd, "PNOFORCE 0", MAX_DRV_CMD_SIZE);
+		os_strlcpy(cmd, "PNOFORCE 0", MAX_DRV_CMD_SIZE);
 		drv->bgscan_enabled = 0;
 	}
 
 	os_memset(&iwr, 0, sizeof(iwr));
-	os_strncpy(iwr.ifr_name, drv->ifname, IFNAMSIZ);
+	os_strlcpy(iwr.ifr_name, drv->ifname, IFNAMSIZ);
 	os_memcpy(buf, cmd, strlen(cmd) + 1);
 	iwr.u.data.pointer = buf;
 	iwr.u.data.length = buf_len;
