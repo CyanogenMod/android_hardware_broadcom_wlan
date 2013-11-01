@@ -10,7 +10,7 @@
  *
  */
 
-#include "driver_nl80211.h"
+#include "hardware_legacy/driver_nl80211.h"
 #include "wpa_supplicant_i.h"
 #include "config.h"
 #ifdef ANDROID
@@ -77,9 +77,11 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 			ret = 0;
 			if ((os_strcasecmp(cmd, "LINKSPEED") == 0) ||
 			    (os_strcasecmp(cmd, "RSSI") == 0) ||
-			    (os_strcasecmp(cmd, "GETBAND") == 0) )
+			    (os_strcasecmp(cmd, "GETBAND") == 0) ||
+			    (os_strncasecmp(cmd, "WLS_BATCHING", 12) == 0))
 				ret = strlen(buf);
-			else if (os_strncasecmp(cmd, "COUNTRY", 7) == 0)
+			else if ((os_strncasecmp(cmd, "COUNTRY", 7) == 0) ||
+				 (os_strncasecmp(cmd, "SETBAND", 7) == 0))
 				wpa_supplicant_event(drv->ctx,
 					EVENT_CHANNEL_LIST_CHANGED, NULL);
 			wpa_printf(MSG_DEBUG, "%s %s len = %d, %d", __func__, buf, ret, strlen(buf));
