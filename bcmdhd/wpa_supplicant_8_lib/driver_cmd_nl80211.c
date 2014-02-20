@@ -95,8 +95,8 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 		ifr.ifr_data = &priv_cmd;
 
 		if ((ret = ioctl(drv->global->ioctl_sock, SIOCDEVPRIVATE + 1, &ifr)) < 0) {
-			wpa_printf(MSG_ERROR, "%s: failed to issue private commands\n", __func__);
-			wpa_driver_send_hang_msg(drv);
+			wpa_printf(MSG_ERROR, "%s: failed to issue private command: %s", __func__, cmd);
+			/* wpa_driver_send_hang_msg(drv); */
 		} else {
 			drv_errors = 0;
 			ret = 0;
