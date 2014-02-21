@@ -86,7 +86,7 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 		os_strlcpy(ifr.ifr_name, bss->ifname, IFNAMSIZ);
 
 #ifdef BCMDHD_64_BIT_IPC
-		priv_cmd.bufaddr = (u64)buf;
+		priv_cmd.bufaddr = (u64)(uintptr_t)buf;
 #else
 		priv_cmd.bufaddr = buf;
 #endif
