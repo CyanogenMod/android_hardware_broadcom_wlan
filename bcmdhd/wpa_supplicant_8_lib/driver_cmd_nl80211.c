@@ -10,6 +10,7 @@
  *
  */
 
+#include <sys/cdefs.h>
 #include "hardware_legacy/driver_nl80211.h"
 #include "wpa_supplicant_i.h"
 #include "config.h"
@@ -101,7 +102,7 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 				 (os_strncasecmp(cmd, "SETBAND", 7) == 0))
 				wpa_supplicant_event(drv->ctx,
 					EVENT_CHANNEL_LIST_CHANGED, NULL);
-			wpa_printf(MSG_DEBUG, "%s %s len = %d, %d", __func__, buf, ret, strlen(buf));
+			wpa_printf(MSG_DEBUG, "%s %s len = %d, %zu", __func__, buf, ret, strlen(buf));
 		}
 	}
 	return ret;
@@ -117,7 +118,7 @@ int wpa_driver_set_p2p_noa(void *priv, u8 count, int start, int duration)
 	return wpa_driver_nl80211_driver_cmd(priv, buf, buf, strlen(buf)+1);
 }
 
-int wpa_driver_get_p2p_noa(void *priv, u8 *buf, size_t len)
+int wpa_driver_get_p2p_noa(void *priv __unused, u8 *buf __unused, size_t len __unused)
 {
 	/* Return 0 till we handle p2p_presence request completely in the driver */
 	return 0;
