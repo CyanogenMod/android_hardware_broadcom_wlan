@@ -32,7 +32,8 @@ LOCAL_SRC_FILES := \
 	wifi_hal.cpp \
 	common.cpp \
 	cpp_bindings.cpp \
-	gscan.cpp 
+	gscan.cpp \
+	link_layer_stats.cpp
 
 LOCAL_MODULE := libwifi-hal-bcm
 
