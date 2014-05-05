@@ -312,7 +312,15 @@ public:
             return result;
         }
 
-        result = request.put_u32(GSCAN_ATTRIBUTE_NUM_SCANS_TO_CACHE, 3);
+        int num_scans = 10;
+        for (int i = 0; i < mParams->num_buckets; i++) {
+            if (mParams->buckets[i].report_events != 0) {
+                num_scans = 1;
+                break;
+            }
+        }
+
+        result = request.put_u32(GSCAN_ATTRIBUTE_NUM_SCANS_TO_CACHE, num_scans);
         if (result < 0) {
             return result;
         }
@@ -404,7 +412,7 @@ public:
     virtual int handleEvent(WifiEvent& event) {
         ALOGI("Got a scan results event");
 
-        event.log();
+        // event.log();
 
         nlattr *vendor_data = event.get_attribute(NL80211_ATTR_VENDOR_DATA);
         int len = event.get_vendor_data_len();
@@ -570,9 +578,10 @@ public:
                         wifi_scan_result *results = (wifi_scan_result *)it2.get_data();
                         for (int i = 0; i < num; i++) {
                             wifi_scan_result *result = results + i;
-                            ALOGI("%02d  %-32s  %02x:%02x:%02x:%02x:%02x:%02x", i,
+                            ALOGI("%02d  %-32s  %02x:%02x:%02x:%02x:%02x:%02x  %04d", i,
                                 result->ssid, result->bssid[0], result->bssid[1], result->bssid[2],
-                                result->bssid[3], result->bssid[4], result->bssid[5]);
+                                result->bssid[3], result->bssid[4], result->bssid[5],
+                                result->rssi);
                         }
                         mRetrieved += num;
                     } else {
@@ -731,7 +740,7 @@ public:
     virtual int handleEvent(WifiEvent& event) {
         ALOGI("Got a hotlist ap found event");
 
-        event.log();
+        // event.log();
 
         nlattr *vendor_data = event.get_attribute(NL80211_ATTR_VENDOR_DATA);
         int len = event.get_vendor_data_len();
@@ -870,9 +879,6 @@ public:
         if (result < 0) {
             return result;
         }
-
-        WifiEvent e(request.getMessage());
-        e.log();
 
         result = requestResponse(request);
         if (result < 0) {

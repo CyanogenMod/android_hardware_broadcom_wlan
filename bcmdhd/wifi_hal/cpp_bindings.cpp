@@ -680,7 +680,7 @@ int WifiCommand::response_handler(struct nl_msg *msg, void *arg) {
         ALOGE("Failed to parse reply message = %d", res);
         return NL_SKIP;
     } else {
-        reply.log();
+        // reply.log();
         return cmd->handleResponse(reply);
     }
 }
