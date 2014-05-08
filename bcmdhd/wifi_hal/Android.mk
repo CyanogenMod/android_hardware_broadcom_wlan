@@ -25,7 +25,7 @@ LOCAL_CFLAGS += -Wno-maybe-uninitialized -Wno-parentheses
 LOCAL_CPPFLAGS += -Wno-conversion-null
 
 LOCAL_C_INCLUDES += \
-	external/libnl-headers \
+	external/libnl/include \
 	$(call include-path-for, libhardware_legacy)/hardware_legacy \
 
 LOCAL_SRC_FILES := \
