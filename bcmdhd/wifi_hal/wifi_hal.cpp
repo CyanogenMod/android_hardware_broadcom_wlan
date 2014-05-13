@@ -235,7 +235,7 @@ static void internal_event_handler(wifi_handle handle, int events)
     } else if (events & POLLHUP) {
         ALOGE("Remote side hung up");
     } else if (events & POLLIN) {
-        ALOGI("Found some events!!!");
+        // ALOGI("Found some events!!!");
         internal_pollin_handler(handle);
     } else {
         ALOGE("Unknown event - %0x", events);
@@ -301,10 +301,10 @@ static int internal_valid_message_handler(nl_msg *msg, void *arg)
         ALOGI("event received %s, vendor_id = 0x%0x, subcmd = 0x%0x",
                 event.get_cmdString(), vendor_id, subcmd);
     } else {
-        ALOGI("event received %s", event.get_cmdString());
+        // ALOGI("event received %s", event.get_cmdString());
     }
 
-    ALOGI("event received %s, vendor_id = 0x%0x", event.get_cmdString(), vendor_id);
+    // ALOGI("event received %s, vendor_id = 0x%0x", event.get_cmdString(), vendor_id);
     // event.log();
 
     bool dispatched = false;

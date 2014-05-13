@@ -34,6 +34,7 @@ typedef enum {
     GSCAN_EVENT_SIGNIFICANT_CHANGE_RESULTS ,
     GSCAN_EVENT_HOTLIST_RESULTS,
     GSCAN_EVENT_SCAN_RESULTS_AVAILABLE,
+    GSCAN_EVENT_FULL_SCAN_RESULTS
 
 } GSCAN_EVENT;
 
@@ -51,10 +52,11 @@ typedef enum {
     GSCAN_SUBCMD_SET_HOTLIST,                           /* 0x1006 */
 
     GSCAN_SUBCMD_SET_SIGNIFICANT_CHANGE_CONFIG,         /* 0x1007 */
+    GSCAN_SUBCMD_ENABLE_FULL_SCAN_RESULTS,              /* 0x1008 */
 
     /* Add more sub commands here */
 
-    GSCAN_SUBCMD_MAX                                    /* 0x1008 */
+    GSCAN_SUBCMD_MAX                                    /* 0x1009 */
 
 } GSCAN_SUB_COMMAND;
 
@@ -62,7 +64,7 @@ typedef enum {
 
     GSCAN_ATTRIBUTE_NUM_BUCKETS = 10,
     GSCAN_ATTRIBUTE_BASE_PERIOD,
-    GSCAN_ATTRIBUTE_BUCKETS,
+    GSCAN_ATTRIBUTE_BUCKETS_BAND,
     GSCAN_ATTRIBUTE_BUCKET_ID,
     GSCAN_ATTRIBUTE_BUCKET_PERIOD,
     GSCAN_ATTRIBUTE_BUCKET_NUM_CHANNELS,
@@ -74,6 +76,8 @@ typedef enum {
     GSCAN_ATTRIBUTE_ENABLE_FEATURE = 20,
     GSCAN_ATTRIBUTE_SCAN_RESULTS_COMPLETE,              /* indicates no more results */
     GSCAN_ATTRIBUTE_FLUSH_FEATURE,                      /* Flush all the configs */
+    GSCAN_ENABLE_FULL_SCAN_RESULTS,
+    GSCAN_ATTRIBUTE_REPORT_EVENTS,
 
     /* remaining reserved for additional attributes */
     GSCAN_ATTRIBUTE_NUM_OF_RESULTS = 30,
@@ -111,6 +115,13 @@ typedef enum {
     GSCAN_ATTRIBUTE_MAX
 
 } GSCAN_ATTRIBUTE;
+
+
+// helper methods
+wifi_error wifi_enable_full_scan_results(wifi_request_id id, wifi_interface_handle iface,
+         wifi_scan_result_handler handler);
+wifi_error wifi_disable_full_scan_results(wifi_request_id id, wifi_interface_handle iface);
+
 
 /////////////////////////////////////////////////////////////////////////////
 
@@ -235,15 +246,123 @@ int createFeatureRequest(WifiRequest& request, int subcmd, int enable) {
 }
 
 /////////////////////////////////////////////////////////////////////////////
+class FullScanResultsCommand : public WifiCommand
+{
+    int *mParams;
+    wifi_scan_result_handler mHandler;
+public:
+    FullScanResultsCommand(wifi_interface_handle iface, int id, int *params,
+                wifi_scan_result_handler handler)
+        : WifiCommand(iface, id), mParams(params), mHandler(handler)
+    { }
+
+    int createRequest(WifiRequest& request, int subcmd, int enable) {
+        int result = request.create(GOOGLE_OUI, subcmd);
+        if (result < 0) {
+            return result;
+        }
+
+        nlattr *data = request.attr_start(NL80211_ATTR_VENDOR_DATA);
+        result = request.put_u32(GSCAN_ENABLE_FULL_SCAN_RESULTS, enable);
+        if (result < 0) {
+            return result;
+        }
+
+        request.attr_end(data);
+        return WIFI_SUCCESS;
+
+    }
+
+    int start() {
+        ALOGD("Enabling Full scan results");
+        WifiRequest request(familyId(), ifaceId());
+        int result = createRequest(request, GSCAN_SUBCMD_ENABLE_FULL_SCAN_RESULTS, 1);
+        if (result != WIFI_SUCCESS) {
+            ALOGE("failed to create request; result = %d", result);
+            return result;
+        }
+
+        registerVendorHandler(GOOGLE_OUI, GSCAN_EVENT_FULL_SCAN_RESULTS);
+
+        result = requestResponse(request);
+        if (result != WIFI_SUCCESS) {
+            ALOGE("failed to enable full scan results; result = %d", result);
+            unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_FULL_SCAN_RESULTS);
+            return result;
+        }
+
+        return result;
+    }
+
+    virtual int cancel() {
+        ALOGD("Disabling Full scan results");
+
+        WifiRequest request(familyId(), ifaceId());
+        int result = createRequest(request, GSCAN_SUBCMD_ENABLE_FULL_SCAN_RESULTS, 0);
+        if (result != WIFI_SUCCESS) {
+            ALOGE("failed to create request; result = %d", result);
+        } else {
+            result = requestResponse(request);
+            if (result != WIFI_SUCCESS) {
+                ALOGE("failed to disable full scan results;result = %d", result);
+            }
+        }
+
+        unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_FULL_SCAN_RESULTS);
+        return WIFI_SUCCESS;
+    }
+
+    virtual int handleResponse(WifiEvent& reply) {
+         ALOGD("Request complete!");
+        /* Nothing to do on response! */
+        return NL_SKIP;
+    }
+
+    virtual int handleEvent(WifiEvent& event) {
+        ALOGI("Full scan results:  Got an event");
+
+        event.log();
+
+        nlattr *vendor_data = event.get_attribute(NL80211_ATTR_VENDOR_DATA);
+        unsigned int len = event.get_vendor_data_len();
+
+        if (vendor_data == NULL || len < sizeof(wifi_scan_result)) {
+            ALOGI("No scan results found");
+            return NL_SKIP;
+        }
+
+        wifi_scan_result *result = (wifi_scan_result *)event.get_vendor_data();
+
+        (*mHandler.on_full_scan_result)(id(), result);
+        ALOGI("%-32s\t", result->ssid);
+
+        ALOGI("%02x:%02x:%02x:%02x:%02x:%02x ", result->bssid[0], result->bssid[1],
+                result->bssid[2], result->bssid[3], result->bssid[4], result->bssid[5]);
+
+        ALOGI("%d\t", result->rssi);
+        ALOGI("%d\t", result->channel);
+        ALOGI("%lld\t", result->ts);
+        ALOGI("%lld\t", result->rtt);
+        ALOGI("%lld\n", result->rtt_sd);
+
+
+        return NL_SKIP;
+    }
+
+};
+/////////////////////////////////////////////////////////////////////////////
 
 class ScanCommand : public WifiCommand
 {
     wifi_scan_cmd_params *mParams;
     wifi_scan_result_handler mHandler;
+    static unsigned mGlobalFullScanBuckets;
+    bool mLocalFullScanBuckets;
 public:
     ScanCommand(wifi_interface_handle iface, int id, wifi_scan_cmd_params *params,
                 wifi_scan_result_handler handler)
-        : WifiCommand(iface, id), mParams(params), mHandler(handler)
+        : WifiCommand(iface, id), mParams(params), mHandler(handler),
+          mLocalFullScanBuckets(0)
     { }
 
     int createSetupRequest(WifiRequest& request) {
@@ -273,21 +392,35 @@ public:
             if (result < 0) {
                 return result;
             }
+            result = request.put_u32(GSCAN_ATTRIBUTE_BUCKETS_BAND,
+                    mParams->buckets[i].band);
+            if (result < 0) {
+                return result;
+            }
+
+            result = request.put_u32(GSCAN_ATTRIBUTE_REPORT_EVENTS,
+                    mParams->buckets[i].report_events);
+            if (result < 0) {
+                return result;
+            }
+
             result = request.put_u32(GSCAN_ATTRIBUTE_BUCKET_NUM_CHANNELS,
                     mParams->buckets[i].num_channels);
             if (result < 0) {
                 return result;
             }
 
-            nlattr *channels = request.attr_start(GSCAN_ATTRIBUTE_BUCKET_CHANNELS);
-            for (int j = 0; j < mParams->buckets[i].num_channels; j++) {
-                result = request.put_u32(j, mParams->buckets[i].channels[j].channel);
-                if (result < 0) {
-                    return result;
+            if (mParams->buckets[i].num_channels) {
+                nlattr *channels = request.attr_start(GSCAN_ATTRIBUTE_BUCKET_CHANNELS);
+                for (int j = 0; j < mParams->buckets[i].num_channels; j++) {
+                    result = request.put_u32(j, mParams->buckets[i].channels[j].channel);
+                    if (result < 0) {
+                        return result;
+                    }
                 }
+                request.attr_end(channels);
             }
 
-            request.attr_end(channels);
             request.attr_end(bucket);
         }
 
@@ -314,7 +447,7 @@ public:
 
         int num_scans = 10;
         for (int i = 0; i < mParams->num_buckets; i++) {
-            if (mParams->buckets[i].report_events != 0) {
+            if (mParams->buckets[i].report_events == 1) {
                 num_scans = 1;
                 break;
             }
@@ -335,6 +468,54 @@ public:
 
     int createStopRequest(WifiRequest& request) {
         return createFeatureRequest(request, GSCAN_SUBCMD_ENABLE_GSCAN, 0);
+    }
+
+    int enableFullScanResultsIfRequired() {
+        /* temporary workaround till we have full support for per bucket scans */
+
+        ALOGI("enabling full scan results if needed");
+        int nBuckets = 0;
+        for (int i = 0; i < mParams->num_buckets; i++) {
+            if (mParams->buckets[i].report_events == 2) {
+                nBuckets++;
+            }
+        }
+
+        if (mGlobalFullScanBuckets == 0 && nBuckets != 0) {
+            int result = wifi_enable_full_scan_results(0x1000, ifaceHandle(), mHandler);
+            if (result != WIFI_SUCCESS) {
+                ALOGI("failed to enable full scan results");
+                return result;
+            } else {
+                ALOGI("successfully enabled full scan results");
+            }
+        } else {
+            ALOGI("mGlobalFullScanBuckets = %d, nBuckets = %d", mGlobalFullScanBuckets, nBuckets);
+        }
+
+        mLocalFullScanBuckets = nBuckets;
+        mGlobalFullScanBuckets += nBuckets;
+        return WIFI_SUCCESS;
+    }
+
+    int disableFullScanResultsIfRequired() {
+        /* temporary workaround till we have full support for per bucket scans */
+
+        if (mLocalFullScanBuckets == 0) {
+            return WIFI_SUCCESS;
+        }
+
+        mGlobalFullScanBuckets -= mLocalFullScanBuckets;
+        if (mGlobalFullScanBuckets == 0) {
+            int result = wifi_disable_full_scan_results(0x1000, ifaceHandle());
+            if (result != WIFI_SUCCESS) {
+                ALOGI("failed to disable full scan results");
+            } else {
+                ALOGI("successfully disable full scan results");
+            }
+        }
+
+        return WIFI_SUCCESS;
     }
 
     int start() {
@@ -383,6 +564,7 @@ public:
             return result;
         }
 
+        result = enableFullScanResultsIfRequired();
         return result;
     }
 
@@ -401,6 +583,8 @@ public:
         }
 
         unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_SCAN_RESULTS_AVAILABLE);
+        disableFullScanResultsIfRequired();
+
         return WIFI_SUCCESS;
     }
 
@@ -429,6 +613,8 @@ public:
     }
 };
 
+unsigned ScanCommand::mGlobalFullScanBuckets = 0;
+
 wifi_error wifi_start_gscan(
         wifi_request_id id,
         wifi_interface_handle iface,
@@ -449,6 +635,19 @@ wifi_error wifi_stop_gscan(wifi_request_id id, wifi_interface_handle iface)
     ALOGD("Stopping GScan");
     wifi_handle handle = getWifiHandle(iface);
 
+    if(id == -1) {
+        wifi_scan_result_handler handler;
+        wifi_scan_cmd_params dummy_params;
+        wifi_handle handle = getWifiHandle(iface);
+        memset(&handler, 0, sizeof(handler));
+
+        ScanCommand *cmd = new ScanCommand(iface, id, &dummy_params, handler);
+        cmd->cancel();
+        delete cmd;
+        return WIFI_SUCCESS;
+    }
+
+
     WifiCommand *cmd = wifi_unregister_cmd(handle, id);
     if (cmd) {
         cmd->cancel();
@@ -458,6 +657,50 @@ wifi_error wifi_stop_gscan(wifi_request_id id, wifi_interface_handle iface)
 
     return WIFI_ERROR_INVALID_ARGS;
 }
+
+
+wifi_error wifi_enable_full_scan_results(
+        wifi_request_id id,
+        wifi_interface_handle iface,
+        wifi_scan_result_handler handler)
+{
+    wifi_handle handle = getWifiHandle(iface);
+    int params_dummy;
+    ALOGD("Enabling full scan results, halHandle = %p", handle);
+
+    FullScanResultsCommand *cmd = new FullScanResultsCommand(iface, id, &params_dummy, handler);
+    wifi_register_cmd(handle, id, cmd);
+
+    return (wifi_error)cmd->start();
+}
+
+wifi_error wifi_disable_full_scan_results(wifi_request_id id, wifi_interface_handle iface)
+{
+    ALOGD("Disabling full scan results");
+    wifi_handle handle = getWifiHandle(iface);
+
+    if(id == -1) {
+        wifi_scan_result_handler handler;
+        wifi_handle handle = getWifiHandle(iface);
+        int params_dummy;
+
+        memset(&handler, 0, sizeof(handler));
+        FullScanResultsCommand *cmd = new FullScanResultsCommand(iface, 0, &params_dummy, handler);
+        cmd->cancel();
+        delete cmd;
+        return WIFI_SUCCESS;
+    }
+
+    WifiCommand *cmd = wifi_unregister_cmd(handle, id);
+    if (cmd) {
+        cmd->cancel();
+        delete cmd;
+        return WIFI_SUCCESS;
+    }
+
+    return WIFI_ERROR_INVALID_ARGS;
+}
+
 
 /////////////////////////////////////////////////////////////////////////////
 
