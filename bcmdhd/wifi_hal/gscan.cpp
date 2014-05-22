@@ -14,9 +14,7 @@
 #include <netlink/object-api.h>
 #include <netlink/netlink.h>
 #include <netlink/socket.h>
-#include <netlink-types.h>
-
-#include "nl80211_copy.h"
+#include <netlink/handlers.h>
 
 #include "sync.h"
 
@@ -445,7 +443,7 @@ public:
             return result;
         }
 
-        int num_scans = 10;
+        int num_scans = 4;
         for (int i = 0; i < mParams->num_buckets; i++) {
             if (mParams->buckets[i].report_events == 1) {
                 num_scans = 1;
@@ -743,6 +741,7 @@ public:
         ALOGI("retrieving %d scan results", *mNum);
 
         for (int i = 0; i < 10 && mRetrieved < *mNum; i++) {
+            ALOGI("executing request number %d", i);
             int result = createRequest(request, (*mNum - mRetrieved), mFlush);
             if (result < 0) {
                 ALOGE("failed to create request");

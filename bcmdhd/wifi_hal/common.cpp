@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <linux/pkt_sched.h>
 #include <netlink/object-api.h>
-#include <netlink-types.h>
+#include <netlink/handlers.h>
 
 #include "wifi_hal.h"
 #include "common.h"

@@ -14,9 +14,7 @@
 #include <netlink/object-api.h>
 #include <netlink/netlink.h>
 #include <netlink/socket.h>
-#include <netlink-types.h>
-
-#include "nl80211_copy.h"
+#include <netlink/handlers.h>
 
 #include "sync.h"
 
