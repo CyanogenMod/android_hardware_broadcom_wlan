@@ -14,9 +14,9 @@
 #include <netlink/object-api.h>
 #include <netlink/netlink.h>
 #include <netlink/socket.h>
-#include <netlink-types.h>
-
-#include "nl80211_copy.h"
+#include <netlink/attr.h>
+#include <netlink/handlers.h>
+#include <netlink/msg.h>
 
 #include <dirent.h>
 #include <net/if.h>
@@ -43,6 +43,7 @@
 #define WIFI_HAL_EVENT_SOCK_PORT     645
 
 static void internal_event_handler(wifi_handle handle, int events);
+static int internal_no_seq_check(nl_msg *msg, void *arg);
 static int internal_valid_message_handler(nl_msg *msg, void *arg);
 static int wifi_get_multicast_id(wifi_handle handle, const char *name, const char *group);
 static int wifi_add_membership(wifi_handle handle, const char *group);
@@ -52,15 +53,8 @@ static wifi_error wifi_init_interfaces(wifi_handle handle);
 
 void wifi_socket_set_local_port(struct nl_sock *sock, uint32_t port)
 {
-	uint32_t pid = getpid() & 0x3FFFFF;
-
-	if (port == 0) {
-		sock->s_flags &= ~NL_OWN_PORT;
-	} else {
-		sock->s_flags |= NL_OWN_PORT;
-	}
-
-	sock->s_local.nl_pid = pid + (port << 22);
+    uint32_t pid = getpid() & 0x3FFFFF;
+    nl_socket_set_local_port(sock, pid + (port << 22));
 }
 
 static nl_sock * wifi_create_nl_socket(int port)
@@ -73,10 +67,6 @@ static nl_sock * wifi_create_nl_socket(int port)
     }
 
     wifi_socket_set_local_port(sock, port);
-
-    struct sockaddr_nl *addr_nl = &(sock->s_local);
-    /* ALOGI("socket address is %d:%d:%d:%d",
-        addr_nl->nl_family, addr_nl->nl_pad, addr_nl->nl_pid, addr_nl->nl_groups); */
 
     struct sockaddr *addr = NULL;
     // ALOGI("sizeof(sockaddr) = %d, sizeof(sockaddr_nl) = %d", sizeof(*addr), sizeof(*addr_nl));
@@ -134,6 +124,7 @@ wifi_error wifi_initialize(wifi_handle *handle)
     }
 
     // ALOGI("cb->refcnt = %d", cb->cb_refcnt);
+    nl_cb_set(cb, NL_CB_SEQ_CHECK, NL_CB_CUSTOM, internal_no_seq_check, info);
     nl_cb_set(cb, NL_CB_VALID, NL_CB_CUSTOM, internal_valid_message_handler, info);
     nl_cb_put(cb);
 
@@ -224,6 +215,7 @@ static int internal_pollin_handler(wifi_handle handle)
     hal_info *info = getHalInfo(handle);
     struct nl_cb *cb = nl_socket_get_cb(info->event_sock);
     int res = nl_recvmsgs(info->event_sock, cb);
+    // ALOGD("nl_recvmsgs returned %d", res);
     nl_cb_put(cb);
     return res;
 }
@@ -263,7 +255,7 @@ void wifi_event_loop(wifi_handle handle)
     do {
         int timeout = -1;                   /* Infinite timeout */
         pfd.revents = 0;
-        //ALOGI("Polling socket");
+        // ALOGI("Polling socket");
         int result = poll(&pfd, 1, -1);
         if (result < 0) {
             ALOGE("Error polling socket");
@@ -278,6 +270,11 @@ void wifi_event_loop(wifi_handle handle)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////
+
+static int internal_no_seq_check(struct nl_msg *msg, void *arg)
+{
+    return NL_OK;
+}
 
 static int internal_valid_message_handler(nl_msg *msg, void *arg)
 {

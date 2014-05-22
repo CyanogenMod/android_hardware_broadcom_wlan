@@ -14,9 +14,8 @@
 #include <netlink/object-api.h>
 #include <netlink/netlink.h>
 #include <netlink/socket.h>
-#include <netlink-types.h>
+#include <netlink/handlers.h>
 
-#include "nl80211_copy.h"
 #include <ctype.h>
 
 #include "wifi_hal.h"
