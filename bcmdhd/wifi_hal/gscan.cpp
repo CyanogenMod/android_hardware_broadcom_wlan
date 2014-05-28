@@ -157,17 +157,13 @@ protected:
         int id = reply.get_vendor_id();
         int subcmd = reply.get_vendor_subcmd();
 
-        ALOGD("Id = %0x, subcmd = %d", id, subcmd);
-
         void *data = reply.get_vendor_data();
         int len = reply.get_vendor_data_len();
 
-        if (len == sizeof(*mCapabilities)) {
-            ALOGE("Invalid reply length");
-            memcpy(mCapabilities, data, len);
-        } else {
-            ALOGE("Invalid reply length: %d", len);
-        }
+        ALOGD("Id = %0x, subcmd = %d, len = %d, expected len = %d", id, subcmd, len,
+                    sizeof(*mCapabilities));
+
+        memcpy(mCapabilities, data, min(len, (int) sizeof(*mCapabilities)));
 
         return NL_OK;
     }
@@ -443,9 +439,10 @@ public:
             return result;
         }
 
-        int num_scans = 4;
+        int num_scans = 20;
         for (int i = 0; i < mParams->num_buckets; i++) {
             if (mParams->buckets[i].report_events == 1) {
+                ALOGD("Setting num_scans to 1");
                 num_scans = 1;
                 break;
             }
@@ -704,14 +701,15 @@ wifi_error wifi_disable_full_scan_results(wifi_request_id id, wifi_interface_han
 
 class GetScanResultsCommand : public WifiCommand {
     wifi_scan_result *mResults;
+    int mMax;
     int *mNum;
     int mRetrieved;
     byte mFlush;
     int mCompleted;
 public:
     GetScanResultsCommand(wifi_interface_handle iface, byte flush,
-            wifi_scan_result *results, int *num)
-        : WifiCommand(iface, -1), mResults(results), mNum(num),
+            wifi_scan_result *results, int max, int *num)
+        : WifiCommand(iface, -1), mResults(results), mMax(max), mNum(num),
                 mRetrieved(0), mFlush(flush), mCompleted(0)
     { }
 
@@ -738,11 +736,10 @@ public:
 
     int execute() {
         WifiRequest request(familyId(), ifaceId());
-        ALOGI("retrieving %d scan results", *mNum);
+        ALOGI("retrieving %d scan results", mMax);
 
-        for (int i = 0; i < 10 && mRetrieved < *mNum; i++) {
-            ALOGI("executing request number %d", i);
-            int result = createRequest(request, (*mNum - mRetrieved), mFlush);
+        for (int i = 0; i < 10 && mRetrieved < mMax; i++) {
+            int result = createRequest(request, (mMax - mRetrieved), mFlush);
             if (result < 0) {
                 ALOGE("failed to create request");
                 return result;
@@ -842,11 +839,11 @@ public:
 };
 
 wifi_error wifi_get_cached_gscan_results(wifi_interface_handle iface, byte flush,
-        wifi_scan_result *results, int *num) {
+        int max, wifi_scan_result *results, int *num) {
 
     ALOGD("Getting cached scan results, iface handle = %p, num = %d", iface, *num);
 
-    GetScanResultsCommand *cmd = new GetScanResultsCommand(iface, flush, results, num);
+    GetScanResultsCommand *cmd = new GetScanResultsCommand(iface, flush, results, max, num);
     return (wifi_error)cmd->execute();
 }
 
@@ -878,20 +875,20 @@ public:
         }
 
         struct nlattr * attr = request.attr_start(GSCAN_ATTRIBUTE_HOTLIST_BSSIDS);
-        for (int i = 0; i < mParams.num; i++) {
+        for (int i = 0; i < mParams.num_ap; i++) {
             nlattr *attr2 = request.attr_start(GSCAN_ATTRIBUTE_HOTLIST_ELEM);
             if (attr2 == NULL) {
                 return WIFI_ERROR_OUT_OF_MEMORY;
             }
-            result = request.put_addr(GSCAN_ATTRIBUTE_BSSID, mParams.bssids[i].bssid);
+            result = request.put_addr(GSCAN_ATTRIBUTE_BSSID, mParams.ap[i].bssid);
             if (result < 0) {
                 return result;
             }
-            result = request.put_u8(GSCAN_ATTRIBUTE_RSSI_HIGH, mParams.bssids[i].high);
+            result = request.put_u8(GSCAN_ATTRIBUTE_RSSI_HIGH, mParams.ap[i].high);
             if (result < 0) {
                 return result;
             }
-            result = request.put_u8(GSCAN_ATTRIBUTE_RSSI_LOW, mParams.bssids[i].low);
+            result = request.put_u8(GSCAN_ATTRIBUTE_RSSI_LOW, mParams.ap[i].low);
             if (result < 0) {
                 return result;
             }
@@ -922,7 +919,7 @@ public:
     }
 
     int start() {
-        ALOGI("Executing hotlist setup request, num = %d", mParams.num);
+        ALOGI("Executing hotlist setup request, num = %d", mParams.num_ap);
         WifiRequest request(familyId(), ifaceId());
         int result = createSetupRequest(request);
         if (result < 0) {
@@ -936,7 +933,7 @@ public:
             return result;
         }
 
-        ALOGI("Successfully set %d APs in the hotlist", mParams.num);
+        ALOGI("Successfully set %d APs in the hotlist", mParams.num_ap);
         result = createFeatureRequest(request, GSCAN_SUBCMD_ENABLE_GSCAN, 1);
         if (result < 0) {
             return result;
@@ -1033,11 +1030,19 @@ wifi_error wifi_reset_bssid_hotlist(wifi_request_id id, wifi_interface_handle if
 
 class SignificantWifiChangeCommand : public WifiCommand
 {
+    typedef struct {
+        mac_addr bssid;                     // BSSID
+        wifi_channel channel;               // channel frequency in MHz
+        int num_rssi;                       // number of rssi samples
+        wifi_rssi rssi[8];                   // RSSI history in db
+    } wifi_significant_change_result_internal;
+
 private:
     wifi_significant_change_params mParams;
     wifi_significant_change_handler mHandler;
     static const int MAX_RESULTS = 64;
-    wifi_scan_result mResults[MAX_RESULTS];
+    wifi_significant_change_result_internal mResultsBuffer[MAX_RESULTS];
+    wifi_significant_change_result *mResults[MAX_RESULTS];
 public:
     SignificantWifiChangeCommand(wifi_interface_handle handle, int id,
             wifi_significant_change_params params, wifi_significant_change_handler handler)
@@ -1070,21 +1075,21 @@ public:
 
         struct nlattr * attr = request.attr_start(GSCAN_ATTRIBUTE_SIGNIFICANT_CHANGE_BSSIDS);
 
-        for (int i = 0; i < mParams.num; i++) {
+        for (int i = 0; i < mParams.num_ap; i++) {
 
             nlattr *attr2 = request.attr_start(i);
             if (attr2 == NULL) {
                 return WIFI_ERROR_OUT_OF_MEMORY;
             }
-            result = request.put_addr(GSCAN_ATTRIBUTE_BSSID, mParams.bssids[i].bssid);
+            result = request.put_addr(GSCAN_ATTRIBUTE_BSSID, mParams.ap[i].bssid);
             if (result < 0) {
                 return result;
             }
-            result = request.put_u8(GSCAN_ATTRIBUTE_RSSI_HIGH, mParams.bssids[i].high);
+            result = request.put_u8(GSCAN_ATTRIBUTE_RSSI_HIGH, mParams.ap[i].high);
             if (result < 0) {
                 return result;
             }
-            result = request.put_u8(GSCAN_ATTRIBUTE_RSSI_LOW, mParams.bssids[i].low);
+            result = request.put_u8(GSCAN_ATTRIBUTE_RSSI_LOW, mParams.ap[i].low);
             if (result < 0) {
                 return result;
             }
@@ -1195,9 +1200,11 @@ public:
         ChangeInfo *ci = (ChangeInfo *)event.get_vendor_data();
 
         for (int i = 0; i < num; i++) {
-            memcpy(mResults[i].bssid, ci[i].bssid, sizeof(mac_addr));
-            mResults[i].rssi = ci[i].rssi_history[7];
-            mResults[i].channel = ci[i].channel;
+            memcpy(mResultsBuffer[i].bssid, ci[i].bssid, sizeof(mac_addr));
+            mResultsBuffer[i].channel = ci[i].channel;
+            mResultsBuffer[i].num_rssi = 8;
+            memcpy(mResultsBuffer[i].rssi, ci[i].rssi_history, 8);
+            mResults[i] = reinterpret_cast<wifi_significant_change_result *>(&(mResultsBuffer[i]));
         }
 
         ALOGI("Retrieved %d scan results", num);
