@@ -8,6 +8,7 @@
 
 #include <utils/Log.h>
 #include "nl80211_copy.h"
+#include "sync.h"
 
 #define SOCKET_BUFFER_SIZE      (32768U)
 #define RECV_BUF_SIZE           (4096)
@@ -95,6 +96,7 @@ typedef struct {
     cb_info *event_cb;                              // event callbacks
     int num_event_cb;                               // number of event callbacks
     int alloc_event_cb;                             // number of allocated callback objects
+    pthread_mutex_t cb_lock;                        // mutex for the event_cb access
 
     cmd_info *cmd;                                  // Outstanding commands
     int num_cmd;                                    // number of commands
@@ -102,6 +104,7 @@ typedef struct {
 
     interface_info **interfaces;                    // array of interfaces
     int num_interfaces;                             // number of interfaces
+
 
     // add other details
 } hal_info;

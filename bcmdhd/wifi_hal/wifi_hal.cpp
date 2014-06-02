@@ -150,6 +150,8 @@ wifi_error wifi_initialize(wifi_handle *handle)
 		return WIFI_ERROR_UNKNOWN;
     }
 
+    pthread_mutex_init(&info->cb_lock, NULL);
+
     *handle = (wifi_handle) info;
 
     wifi_add_membership(*handle, "scan");
@@ -159,6 +161,7 @@ wifi_error wifi_initialize(wifi_handle *handle)
 
     wifi_init_interfaces(*handle);
     // ALOGI("Found %d interfaces", info->num_interfaces);
+
 
     ALOGI("Initialized Wifi HAL Successfully; vendor cmd = %d", NL80211_CMD_VENDOR);
     return WIFI_SUCCESS;
@@ -196,6 +199,7 @@ static void internal_cleaned_up_handler(wifi_handle handle)
     }
 
     (*cleaned_up_handler)(handle);
+    pthread_mutex_destroy(&info->cb_lock);
     free(info);
 
     ALOGI("Internal cleanup completed");
@@ -305,6 +309,9 @@ static int internal_valid_message_handler(nl_msg *msg, void *arg)
     // event.log();
 
     bool dispatched = false;
+
+    pthread_mutex_lock(&info->cb_lock);
+
     for (int i = 0; i < info->num_event_cb; i++) {
         if (cmd == info->event_cb[i].nl_cmd) {
             if (cmd == NL80211_CMD_VENDOR
@@ -322,9 +329,10 @@ static int internal_valid_message_handler(nl_msg *msg, void *arg)
     }
 
     if (!dispatched) {
-        ALOGI("event ignored!!");
+        // ALOGI("event ignored!!");
     }
 
+    pthread_mutex_unlock(&info->cb_lock);
     return NL_OK;
 }
 
