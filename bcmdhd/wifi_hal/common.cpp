@@ -174,6 +174,22 @@ WifiCommand *wifi_unregister_cmd(wifi_handle handle, int id)
     return cmd;
 }
 
+WifiCommand *wifi_get_cmd(wifi_handle handle, int id)
+{
+    hal_info *info = (hal_info *)handle;
+
+    WifiCommand *cmd = NULL;
+
+    for (int i = 0; i < info->num_cmd; i++) {
+        if (info->cmd[i].id == id) {
+            cmd = info->cmd[i].cmd;
+            break;
+        }
+    }
+
+    return cmd;
+}
+
 void wifi_unregister_cmd(wifi_handle handle, WifiCommand *cmd)
 {
     hal_info *info = (hal_info *)handle;

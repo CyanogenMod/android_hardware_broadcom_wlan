@@ -31,6 +31,7 @@ LOCAL_C_INCLUDES += \
 
 LOCAL_SRC_FILES := \
 	wifi_hal.cpp \
+	rtt.cpp \
 	common.cpp \
 	cpp_bindings.cpp \
 	gscan.cpp \

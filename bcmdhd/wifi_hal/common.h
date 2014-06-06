@@ -58,6 +58,17 @@ typedef enum {
 
 } ANDROID_VENDOR_SUB_COMMAND;
 
+typedef enum {
+    BRCM_RESERVED1,
+    BRCM_RESERVED2,
+    GSCAN_EVENT_SIGNIFICANT_CHANGE_RESULTS ,
+    GSCAN_EVENT_HOTLIST_RESULTS,
+    GSCAN_EVENT_SCAN_RESULTS_AVAILABLE,
+    GSCAN_EVENT_FULL_SCAN_RESULTS,
+	RTT_EVENT_COMPLETE
+
+} WIFI_EVENT;
+
 typedef void (*wifi_internal_event_handler) (wifi_handle handle, int events);
 
 class WifiCommand;
@@ -118,6 +129,7 @@ void wifi_unregister_vendor_handler(wifi_handle handle, uint32_t id, int subcmd)
 
 wifi_error wifi_register_cmd(wifi_handle handle, int id, WifiCommand *cmd);
 WifiCommand *wifi_unregister_cmd(wifi_handle handle, int id);
+WifiCommand *wifi_get_cmd(wifi_handle handle, int id);
 void wifi_unregister_cmd(wifi_handle handle, WifiCommand *cmd);
 
 interface_info *getIfaceInfo(wifi_interface_handle);

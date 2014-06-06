@@ -173,6 +173,9 @@ public:
 
     int create(uint32_t id, int subcmd);
 
+    int put(int attribute, void *ptr, unsigned len) {
+        return nla_put(mMsg, attribute, len, ptr);
+    }
     int put_u8(int attribute, uint8_t value) {
         return nla_put(mMsg, attribute, sizeof(value), &value);
     }
