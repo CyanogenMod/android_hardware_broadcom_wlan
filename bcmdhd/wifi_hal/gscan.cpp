@@ -41,10 +41,11 @@ typedef enum {
 
     GSCAN_SUBCMD_SET_SIGNIFICANT_CHANGE_CONFIG,         /* 0x1007 */
     GSCAN_SUBCMD_ENABLE_FULL_SCAN_RESULTS,              /* 0x1008 */
+    GSCAN_SUBCMD_GET_CHANNEL_LIST,                       /* 0x1009 */
 
     /* Add more sub commands here */
 
-    GSCAN_SUBCMD_MAX                                    /* 0x1009 */
+    GSCAN_SUBCMD_MAX                                    /* 0x100A */
 
 } GSCAN_SUB_COMMAND;
 
@@ -60,6 +61,7 @@ typedef enum {
     GSCAN_ATTRIBUTE_NUM_AP_PER_SCAN,
     GSCAN_ATTRIBUTE_REPORT_THRESHOLD,
     GSCAN_ATTRIBUTE_NUM_SCANS_TO_CACHE,
+    GSCAN_ATTRIBUTE_BAND = GSCAN_ATTRIBUTE_BUCKETS_BAND,
 
     GSCAN_ATTRIBUTE_ENABLE_FEATURE = 20,
     GSCAN_ATTRIBUTE_SCAN_RESULTS_COMPLETE,              /* indicates no more results */
@@ -74,6 +76,8 @@ typedef enum {
     GSCAN_ATTRIBUTE_SCAN_ID,                            /* indicates scan number */
     GSCAN_ATTRIBUTE_SCAN_FLAGS,                         /* indicates if scan was aborted */
     GSCAN_ATTRIBUTE_AP_FLAGS,                           /* flags on significant change event */
+    GSCAN_ATTRIBUTE_NUM_CHANNELS,
+    GSCAN_ATTRIBUTE_CHANNEL_LIST,
 
     /* remaining reserved for additional attributes */
 
@@ -167,6 +171,88 @@ wifi_error wifi_get_gscan_capabilities(wifi_interface_handle handle,
     return (wifi_error) command.requestResponse();
 }
 
+class GetChannelListCommand : public WifiCommand
+{
+    wifi_channel *channels;
+    int max_channels;
+    int *num_channels;
+    int band;
+public:
+    GetChannelListCommand(wifi_interface_handle iface, wifi_channel *channel_buf, int *ch_num,
+        int num_max_ch, int band)
+        : WifiCommand(iface, 0), channels(channel_buf), max_channels(num_max_ch), num_channels(ch_num),
+        band(band)
+    {
+        memset(channels, 0, sizeof(wifi_channel) * max_channels);
+    }
+    virtual int create() {
+        ALOGD("Creating message to get channel list; iface = %d", mIfaceInfo->id);
+
+        int ret = mMsg.create(GOOGLE_OUI, GSCAN_SUBCMD_GET_CHANNEL_LIST);
+        if (ret < 0) {
+            return ret;
+        }
+
+        nlattr *data = mMsg.attr_start(NL80211_ATTR_VENDOR_DATA);
+        ret = mMsg.put_u32(GSCAN_ATTRIBUTE_BAND, band);
+        if (ret < 0) {
+            return ret;
+        }
+
+        mMsg.attr_end(data);
+
+        return ret;
+    }
+
+protected:
+    virtual int handleResponse(WifiEvent& reply) {
+
+        ALOGD("In GetChannelList::handleResponse");
+
+        if (reply.get_cmd() != NL80211_CMD_VENDOR) {
+            ALOGD("Ignoring reply with cmd = %d", reply.get_cmd());
+            return NL_SKIP;
+        }
+
+        int id = reply.get_vendor_id();
+        int subcmd = reply.get_vendor_subcmd();
+        int num_channels_to_copy = 0;
+
+        nlattr *vendor_data = reply.get_attribute(NL80211_ATTR_VENDOR_DATA);
+        int len = reply.get_vendor_data_len();
+
+        ALOGD("Id = %0x, subcmd = %d, len = %d", id, subcmd, len);
+        if (vendor_data == NULL || len == 0) {
+            ALOGE("no vendor data in GetChannelList response; ignoring it");
+            return NL_SKIP;
+        }
+
+        for (nl_iterator it(vendor_data); it.has_next(); it.next()) {
+            if (it.get_type() == GSCAN_ATTRIBUTE_NUM_CHANNELS) {
+                num_channels_to_copy = it.get_u32();
+                ALOGI("Got channel list with %d channels", num_channels_to_copy);
+                if(num_channels_to_copy > max_channels)
+                    num_channels_to_copy = max_channels;
+                *num_channels = num_channels_to_copy;
+            } else if (it.get_type() == GSCAN_ATTRIBUTE_CHANNEL_LIST && num_channels_to_copy) {
+                memcpy(channels, it.get_data(), sizeof(int) * num_channels_to_copy);
+            } else {
+                ALOGW("Ignoring invalid attribute type = %d, size = %d",
+                        it.get_type(), it.get_len());
+            }
+        }
+
+        return NL_OK;
+    }
+};
+
+wifi_error wifi_get_valid_channels(wifi_interface_handle handle,
+        int band, int max_channels, wifi_channel *channels, int *num_channels)
+{
+    GetChannelListCommand command(handle, channels, num_channels,
+                                        max_channels, band);
+    return (wifi_error) command.requestResponse();
+}
 /////////////////////////////////////////////////////////////////////////////
 
 /* helper functions */
@@ -317,7 +403,9 @@ public:
 
         wifi_scan_result *result = (wifi_scan_result *)event.get_vendor_data();
 
-        (*mHandler.on_full_scan_result)(id(), result);
+        if(*mHandler.on_full_scan_result)
+            (*mHandler.on_full_scan_result)(id(), result);
+
         ALOGI("%-32s\t", result->ssid);
 
         ALOGI("%02x:%02x:%02x:%02x:%02x:%02x ", result->bssid[0], result->bssid[1],
