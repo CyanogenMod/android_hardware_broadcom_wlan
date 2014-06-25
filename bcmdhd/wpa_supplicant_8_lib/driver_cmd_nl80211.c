@@ -182,7 +182,7 @@ int wpa_driver_set_ap_wps_p2p_ie(void *priv, const struct wpabuf *beacon,
 
 	wpa_printf(MSG_DEBUG, "%s: Entry", __func__);
 	for (i = 0; cmd_arr[i].cmd != -1; i++) {
-		ap_wps_p2p_ie = cmd_arr[i].src ? cmd_arr[i].src : NULL;
+		ap_wps_p2p_ie = cmd_arr[i].src;
 		if (ap_wps_p2p_ie) {
 			buf_len = strlen(_cmd) + 3 + wpabuf_len(ap_wps_p2p_ie);
 			buf = os_zalloc(buf_len);
