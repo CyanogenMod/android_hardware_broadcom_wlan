@@ -42,12 +42,20 @@
 #define WIFI_HAL_CMD_SOCK_PORT       644
 #define WIFI_HAL_EVENT_SOCK_PORT     645
 
+#define FEATURE_SET                  0
+#define FEATURE_SET_MATRIX           1
+
 static void internal_event_handler(wifi_handle handle, int events);
 static int internal_no_seq_check(nl_msg *msg, void *arg);
 static int internal_valid_message_handler(nl_msg *msg, void *arg);
 static int wifi_get_multicast_id(wifi_handle handle, const char *name, const char *group);
 static int wifi_add_membership(wifi_handle handle, const char *group);
 static wifi_error wifi_init_interfaces(wifi_handle handle);
+
+typedef enum wifi_feature_set_attr {
+    ANDR_WIFI_ATTRIBUTE_NUM_FEATURE_SET,
+    ANDR_WIFI_ATTRIBUTE_FEATURE_SET
+} wifi_feature_set_attr_t;
 
 /* Initialize/Cleanup */
 
@@ -98,7 +106,7 @@ wifi_error wifi_initialize(wifi_handle *handle)
     hal_info *info = (hal_info *)malloc(sizeof(hal_info));
     if (info == NULL) {
         ALOGE("Could not allocate hal_info");
-		return WIFI_ERROR_UNKNOWN;
+        return WIFI_ERROR_UNKNOWN;
     }
 
     memset(info, 0, sizeof(*info));
@@ -147,7 +155,7 @@ wifi_error wifi_initialize(wifi_handle *handle)
         nl_socket_free(cmd_sock);
         nl_socket_free(event_sock);
         free(info);
-		return WIFI_ERROR_UNKNOWN;
+        return WIFI_ERROR_UNKNOWN;
     }
 
     pthread_mutex_init(&info->cb_lock, NULL);
@@ -411,6 +419,105 @@ public:
 
 };
 
+class GetFeatureSetCommand : public WifiCommand {
+
+private:
+    int feature_type;
+    feature_set *fset;
+    feature_set *feature_matrix;
+    int *fm_size;
+    int set_size_max;
+public:
+    GetFeatureSetCommand(wifi_interface_handle handle, int feature, feature_set *set,
+         feature_set set_matrix[], int *size, int max_size)
+        : WifiCommand(handle, 0)
+    {
+        feature_type = feature;
+        fset = set;
+        feature_matrix = set_matrix;
+        fm_size = size;
+        set_size_max = max_size;
+    }
+
+    virtual int create() {
+        int ret;
+
+        if(feature_type == FEATURE_SET) {
+            ret = mMsg.create(GOOGLE_OUI, WIFI_SUBCMD_GET_FEATURE_SET);
+        } else if (feature_type == FEATURE_SET_MATRIX){
+            ret = mMsg.create(GOOGLE_OUI, WIFI_SUBCMD_GET_FEATURE_SET_MATRIX);
+        } else {
+            ALOGE("Unknown feature type %d", feature_type);
+            return -1;
+        }
+
+        if (ret < 0) {
+            ALOGE("Can't create message to send to driver - %d", ret);
+        }
+
+        return ret;
+    }
+
+protected:
+    virtual int handleResponse(WifiEvent& reply) {
+
+        ALOGD("In GetFeatureSetCommand::handleResponse");
+
+        if (reply.get_cmd() != NL80211_CMD_VENDOR) {
+            ALOGD("Ignoring reply with cmd = %d", reply.get_cmd());
+            return NL_SKIP;
+        }
+
+        int id = reply.get_vendor_id();
+        int subcmd = reply.get_vendor_subcmd();
+
+        nlattr *vendor_data = reply.get_attribute(NL80211_ATTR_VENDOR_DATA);
+        int len = reply.get_vendor_data_len();
+
+        ALOGD("Id = %0x, subcmd = %d, len = %d", id, subcmd, len);
+        if (vendor_data == NULL || len == 0) {
+            ALOGE("no vendor data in GetFeatureSetCommand response; ignoring it");
+            return NL_SKIP;
+        }
+        if(feature_type == FEATURE_SET) {
+            void *data = reply.get_vendor_data();
+            if(!fset) {
+                ALOGE("Buffers pointers not set");
+                return NL_SKIP;
+            }
+            memcpy(fset, data, min(len, (int) sizeof(*fset)));
+        } else {
+            int num_features_set = 0;
+            int i = 0;
+
+            if(!feature_matrix || !fm_size) {
+                ALOGE("Buffers pointers not set");
+                return NL_SKIP;
+            }
+
+            for (nl_iterator it(vendor_data); it.has_next(); it.next()) {
+                if (it.get_type() == ANDR_WIFI_ATTRIBUTE_NUM_FEATURE_SET) {
+                    num_features_set = it.get_u32();
+                    ALOGI("Got feature list with %d concurrent sets", num_features_set);
+                    if(set_size_max && (num_features_set > set_size_max))
+                        num_features_set = set_size_max;
+                    *fm_size = num_features_set;
+                } else if ((it.get_type() == ANDR_WIFI_ATTRIBUTE_FEATURE_SET) &&
+                             i < num_features_set) {
+                    feature_matrix[i] = it.get_u32();
+                    i++;
+                } else {
+                    ALOGW("Ignoring invalid attribute type = %d, size = %d",
+                            it.get_type(), it.get_len());
+                }
+            }
+
+        }
+        return NL_OK;
+    }
+
+};
+
 static int wifi_get_multicast_id(wifi_handle handle, const char *name, const char *group)
 {
     GetMulticastIdCommand cmd(handle, name, group);
@@ -505,6 +612,19 @@ wifi_error wifi_get_iface_name(wifi_interface_handle handle, char *name, size_t 
     interface_info *info = (interface_info *)handle;
     strcpy(name, info->name);
     return WIFI_SUCCESS;
+}
+
+wifi_error wifi_get_supported_feature_set(wifi_interface_handle handle, feature_set *set)
+{
+    GetFeatureSetCommand command(handle, FEATURE_SET, set, NULL, NULL, 1);
+    return (wifi_error) command.requestResponse();
+}
+
+wifi_error wifi_get_concurrency_matrix(wifi_interface_handle handle, int set_size_max,
+       feature_set set[], int *set_size)
+{
+    GetFeatureSetCommand command(handle, FEATURE_SET_MATRIX, NULL, set, set_size, set_size_max);
+    return (wifi_error) command.requestResponse();
 }
 
 /////////////////////////////////////////////////////////////////////////////

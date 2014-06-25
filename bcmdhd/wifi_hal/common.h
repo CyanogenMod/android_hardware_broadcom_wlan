@@ -59,13 +59,39 @@ typedef enum {
 } ANDROID_VENDOR_SUB_COMMAND;
 
 typedef enum {
+
+    GSCAN_SUBCMD_GET_CAPABILITIES = ANDROID_NL80211_SUBCMD_GSCAN_RANGE_START,
+
+    GSCAN_SUBCMD_SET_CONFIG,                            /* 0x1001 */
+
+    GSCAN_SUBCMD_SET_SCAN_CONFIG,                       /* 0x1002 */
+    GSCAN_SUBCMD_ENABLE_GSCAN,                          /* 0x1003 */
+    GSCAN_SUBCMD_GET_SCAN_RESULTS,                      /* 0x1004 */
+    GSCAN_SUBCMD_SCAN_RESULTS,                          /* 0x1005 */
+
+    GSCAN_SUBCMD_SET_HOTLIST,                           /* 0x1006 */
+
+    GSCAN_SUBCMD_SET_SIGNIFICANT_CHANGE_CONFIG,         /* 0x1007 */
+    GSCAN_SUBCMD_ENABLE_FULL_SCAN_RESULTS,              /* 0x1008 */
+    GSCAN_SUBCMD_GET_CHANNEL_LIST,                       /* 0x1009 */
+
+    WIFI_SUBCMD_GET_FEATURE_SET,                         /* 0x100A */
+    WIFI_SUBCMD_GET_FEATURE_SET_MATRIX,                  /* 0x100B */
+    /* Add more sub commands here */
+
+    GSCAN_SUBCMD_MAX                                    /* 0x100C */
+
+} WIFI_SUB_COMMAND;
+
+typedef enum {
     BRCM_RESERVED1,
     BRCM_RESERVED2,
     GSCAN_EVENT_SIGNIFICANT_CHANGE_RESULTS ,
     GSCAN_EVENT_HOTLIST_RESULTS,
     GSCAN_EVENT_SCAN_RESULTS_AVAILABLE,
     GSCAN_EVENT_FULL_SCAN_RESULTS,
-	RTT_EVENT_COMPLETE
+    RTT_EVENT_COMPLETE,
+    GSCAN_EVENT_COMPLETE_SCAN
 
 } WIFI_EVENT;
 

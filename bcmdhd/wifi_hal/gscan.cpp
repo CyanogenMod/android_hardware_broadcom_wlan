@@ -28,29 +28,6 @@
 
 typedef enum {
 
-    GSCAN_SUBCMD_GET_CAPABILITIES = ANDROID_NL80211_SUBCMD_GSCAN_RANGE_START,
-
-    GSCAN_SUBCMD_SET_CONFIG,                            /* 0x1001 */
-
-    GSCAN_SUBCMD_SET_SCAN_CONFIG,                       /* 0x1002 */
-    GSCAN_SUBCMD_ENABLE_GSCAN,                          /* 0x1003 */
-    GSCAN_SUBCMD_GET_SCAN_RESULTS,                      /* 0x1004 */
-    GSCAN_SUBCMD_SCAN_RESULTS,                          /* 0x1005 */
-
-    GSCAN_SUBCMD_SET_HOTLIST,                           /* 0x1006 */
-
-    GSCAN_SUBCMD_SET_SIGNIFICANT_CHANGE_CONFIG,         /* 0x1007 */
-    GSCAN_SUBCMD_ENABLE_FULL_SCAN_RESULTS,              /* 0x1008 */
-    GSCAN_SUBCMD_GET_CHANNEL_LIST,                       /* 0x1009 */
-
-    /* Add more sub commands here */
-
-    GSCAN_SUBCMD_MAX                                    /* 0x100A */
-
-} GSCAN_SUB_COMMAND;
-
-typedef enum {
-
     GSCAN_ATTRIBUTE_NUM_BUCKETS = 10,
     GSCAN_ATTRIBUTE_BASE_PERIOD,
     GSCAN_ATTRIBUTE_BUCKETS_BAND,
@@ -518,13 +495,6 @@ public:
         }
 
         int num_scans = 20;
-        for (int i = 0; i < mParams->num_buckets; i++) {
-            if (mParams->buckets[i].report_events == 1) {
-                ALOGD("Setting num_scans to 1");
-                num_scans = 1;
-                break;
-            }
-        }
 
         result = request.put_u32(GSCAN_ATTRIBUTE_NUM_SCANS_TO_CACHE, num_scans);
         if (result < 0) {
@@ -629,6 +599,8 @@ public:
         }
 
         registerVendorHandler(GOOGLE_OUI, GSCAN_EVENT_SCAN_RESULTS_AVAILABLE);
+        registerVendorHandler(GOOGLE_OUI, GSCAN_EVENT_COMPLETE_SCAN);
+
 
         result = requestResponse(request);
         if (result != WIFI_SUCCESS) {
@@ -673,15 +645,31 @@ public:
 
         nlattr *vendor_data = event.get_attribute(NL80211_ATTR_VENDOR_DATA);
         int len = event.get_vendor_data_len();
+        int event_id = event.get_vendor_subcmd();
 
-        if (vendor_data == NULL || len != 4) {
-            ALOGI("No scan results found");
-            return NL_SKIP;
+        if(event_id == GSCAN_EVENT_COMPLETE_SCAN) {
+            if (vendor_data == NULL || len != 4) {
+                ALOGI("Scan complete type not mentioned!");
+                return NL_SKIP;
+            }
+            wifi_scan_event evt_type;
+
+            evt_type = (wifi_scan_event) event.get_u32(NL80211_ATTR_VENDOR_DATA);
+            ALOGI("Scan complete: Received event type %d", evt_type);
+            if(*mHandler.on_scan_event)
+                (*mHandler.on_scan_event)(evt_type, evt_type);
+        } else {
+
+            if (vendor_data == NULL || len != 4) {
+                ALOGI("No scan results found");
+                return NL_SKIP;
+            }
+
+            int num = event.get_u32(NL80211_ATTR_VENDOR_DATA);
+            ALOGI("Found %d scan results", num);
+            if(*mHandler.on_scan_results_available)
+                (*mHandler.on_scan_results_available)(id(), num);
         }
-
-        int num = event.get_u32(NL80211_ATTR_VENDOR_DATA);
-        ALOGI("Found %d scan results", num);
-        (*mHandler.on_scan_results_available)(id(), num);
         return NL_SKIP;
     }
 };
@@ -1271,7 +1259,7 @@ public:
             uint16_t flags;
             uint16_t channel;
             mac_addr bssid;
-            byte rssi_history[8];
+            s8 rssi_history[8];
         } ChangeInfo;
 
         int num = min(len / sizeof(ChangeInfo), MAX_RESULTS);
@@ -1281,7 +1269,8 @@ public:
             memcpy(mResultsBuffer[i].bssid, ci[i].bssid, sizeof(mac_addr));
             mResultsBuffer[i].channel = ci[i].channel;
             mResultsBuffer[i].num_rssi = 8;
-            memcpy(mResultsBuffer[i].rssi, ci[i].rssi_history, 8);
+            for (int j = 0; j < mResultsBuffer[i].num_rssi; j++)
+                mResultsBuffer[i].rssi[j] = (int) ci[i].rssi_history[j];
             mResults[i] = reinterpret_cast<wifi_significant_change_result *>(&(mResultsBuffer[i]));
         }
 
