@@ -40,11 +40,11 @@ public:
     { }
 
     virtual int create() {
-        ALOGD("Creating message to get link statistics; iface = %d", mIfaceInfo->id);
+        // ALOGD("Creating message to get link statistics; iface = %d", mIfaceInfo->id);
 
         int ret = mMsg.create(GOOGLE_OUI, LSTATS_SUBCMD_GET_INFO);
         if (ret < 0) {
-		ALOGD("Failed to create %x - %d", LSTATS_SUBCMD_GET_INFO, ret);
+            ALOGE("Failed to create %x - %d", LSTATS_SUBCMD_GET_INFO, ret);
             return ret;
         }
 
@@ -54,7 +54,7 @@ public:
 protected:
     virtual int handleResponse(WifiEvent& reply) {
 
-        ALOGD("In GetLinkStatsCommand::handleResponse");
+        // ALOGD("In GetLinkStatsCommand::handleResponse");
 
         if (reply.get_cmd() != NL80211_CMD_VENDOR) {
             ALOGD("Ignoring reply with cmd = %d", reply.get_cmd());
@@ -64,13 +64,13 @@ protected:
         int id = reply.get_vendor_id();
         int subcmd = reply.get_vendor_subcmd();
 
-        ALOGD("Id = %0x, subcmd = %d", id, subcmd);
+        // ALOGD("Id = %0x, subcmd = %d", id, subcmd);
 
         void *data = reply.get_vendor_data();
         int len = reply.get_vendor_data_len();
 
         if (len == sizeof(wifi_iface_stat)) {
-	    (*mHandler.on_link_stats_results)(id, (wifi_iface_stat *)data, 1, NULL);
+            (*mHandler.on_link_stats_results)(id, (wifi_iface_stat *)data, 1, NULL);
         } else {
             ALOGE("Invalid reply length: %d", len);
         }
