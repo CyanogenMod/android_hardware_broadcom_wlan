@@ -29,8 +29,9 @@
 
 typedef enum {
 
-    RTT_SUBCMD_SET_CONFIG = ANDROID_NL80211_SUBCMD_RTT_RANGE_START
-
+    RTT_SUBCMD_SET_CONFIG = ANDROID_NL80211_SUBCMD_RTT_RANGE_START,
+    RTT_SUBCMD_CANCEL_CONFIG,
+    RTT_SUBCMD_GETCAPABILITY,
 } RTT_SUB_COMMAND;
 
 typedef enum {
@@ -45,8 +46,53 @@ typedef enum {
     RTT_ATTRIBUTE_TARGET_NUM_MEASUREMENT,
     RTT_ATTRIBUTE_TARGET_NUM_PKT,
     RTT_ATTRIBUTE_TARGET_NUM_RETRY,
-    RTT_ATTRIBUTE_FLUSH_CFG
+
 } GSCAN_ATTRIBUTE;
+class GetRttCapabilitiesCommand : public WifiCommand
+{
+    wifi_rtt_capabilities *mCapabilities;
+public:
+    GetRttCapabilitiesCommand(wifi_interface_handle iface, wifi_rtt_capabilities *capabitlites)
+        : WifiCommand(iface, 0), mCapabilities(capabitlites)
+    {
+        memset(mCapabilities, 0, sizeof(*mCapabilities));
+    }
+
+    virtual int create() {
+        ALOGD("Creating message to get scan capablities; iface = %d", mIfaceInfo->id);
+
+        int ret = mMsg.create(GOOGLE_OUI, RTT_SUBCMD_GETCAPABILITY);
+        if (ret < 0) {
+            return ret;
+        }
+
+        return ret;
+    }
+
+protected:
+    virtual int handleResponse(WifiEvent& reply) {
+
+        ALOGD("In GetRttCapabilitiesCommand::handleResponse");
+
+        if (reply.get_cmd() != NL80211_CMD_VENDOR) {
+            ALOGD("Ignoring reply with cmd = %d", reply.get_cmd());
+            return NL_SKIP;
+        }
+
+        int id = reply.get_vendor_id();
+        int subcmd = reply.get_vendor_subcmd();
+
+        void *data = reply.get_vendor_data();
+        int len = reply.get_vendor_data_len();
+
+        ALOGD("Id = %0x, subcmd = %d, len = %d, expected len = %d", id, subcmd, len,
+                    sizeof(*mCapabilities));
+
+        memcpy(mCapabilities, data, min(len, (int) sizeof(*mCapabilities)));
+
+        return NL_OK;
+    }
+};
 
 
 class RttCommand : public WifiCommand
@@ -132,21 +178,19 @@ public:
     }
 
     int createTeardownRequest(WifiRequest& request, unsigned num_devices, mac_addr addr[]) {
-        int result = request.create(GOOGLE_OUI, RTT_SUBCMD_SET_CONFIG);
+        int result = request.create(GOOGLE_OUI, RTT_SUBCMD_CANCEL_CONFIG);
         if (result < 0) {
             return result;
         }
 
         nlattr *data = request.attr_start(NL80211_ATTR_VENDOR_DATA);
-        struct nlattr * attr = request.attr_start(RTT_ATTRIBUTE_FLUSH_CFG);
+        request.put_u8(RTT_ATTRIBUTE_TARGET_CNT, num_devices);
         for(unsigned i = 0; i < num_devices; i++) {
             result = request.put_addr(RTT_ATTRIBUTE_TARGET_MAC, addr[i]);
             if (result < 0) {
                 return result;
             }
         }
-
-        request.attr_end(attr);
         request.attr_end(data);
         return result;
     }
@@ -166,13 +210,6 @@ public:
         }
 
         registerVendorHandler(GOOGLE_OUI, RTT_EVENT_COMPLETE);
-
-        result = requestResponse(request);
-        if (result < 0) {
-            unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_HOTLIST_RESULTS);
-            return result;
-        }
-
         ALOGI("successfully restarted the scan");
         return result;
     }
@@ -260,15 +297,21 @@ wifi_error wifi_rtt_range_cancel(wifi_request_id id,  wifi_interface_handle ifac
         unsigned num_devices, mac_addr addr[])
 {
     wifi_handle handle = getWifiHandle(iface);
-
-    RttCommand *cmd = (RttCommand *)wifi_get_cmd(handle, id);
+    RttCommand *cmd = (RttCommand *)wifi_unregister_cmd(handle, id);
     if (cmd) {
         cmd->cancel_specific(num_devices, addr);
+        delete cmd;
         return WIFI_SUCCESS;
     }
 
     return WIFI_ERROR_INVALID_ARGS;
 }
-
+/* API to get RTT capability */
+wifi_error wifi_get_rtt_capabilities(wifi_interface_handle iface,
+        wifi_rtt_capabilities *capabilities)
+{
+    GetRttCapabilitiesCommand command(iface, capabilities);
+    return (wifi_error) command.requestResponse();
+}
 
 
