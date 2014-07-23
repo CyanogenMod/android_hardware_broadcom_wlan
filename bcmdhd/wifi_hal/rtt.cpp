@@ -256,7 +256,7 @@ public:
     }
 
     virtual int handleEvent(WifiEvent& event) {
-        ALOGI("Got a scan results event");
+        ALOGI("Got an RTT event");
 
         // event.log();
 
