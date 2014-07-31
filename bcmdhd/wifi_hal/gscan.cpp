@@ -711,7 +711,7 @@ wifi_error wifi_stop_gscan(wifi_request_id id, wifi_interface_handle iface)
 
         ScanCommand *cmd = new ScanCommand(iface, id, &dummy_params, handler);
         cmd->cancel();
-        delete cmd;
+        cmd->releaseRef();
         return WIFI_SUCCESS;
     }
 
@@ -719,7 +719,7 @@ wifi_error wifi_stop_gscan(wifi_request_id id, wifi_interface_handle iface)
     WifiCommand *cmd = wifi_unregister_cmd(handle, id);
     if (cmd) {
         cmd->cancel();
-        delete cmd;
+        cmd->releaseRef();
         return WIFI_SUCCESS;
     }
 
@@ -755,14 +755,14 @@ wifi_error wifi_disable_full_scan_results(wifi_request_id id, wifi_interface_han
         memset(&handler, 0, sizeof(handler));
         FullScanResultsCommand *cmd = new FullScanResultsCommand(iface, 0, &params_dummy, handler);
         cmd->cancel();
-        delete cmd;
+        cmd->releaseRef();
         return WIFI_SUCCESS;
     }
 
     WifiCommand *cmd = wifi_unregister_cmd(handle, id);
     if (cmd) {
         cmd->cancel();
-        delete cmd;
+        cmd->releaseRef();
         return WIFI_SUCCESS;
     }
 
@@ -1091,7 +1091,7 @@ wifi_error wifi_reset_bssid_hotlist(wifi_request_id id, wifi_interface_handle if
     WifiCommand *cmd = wifi_unregister_cmd(handle, id);
     if (cmd) {
         cmd->cancel();
-        delete cmd;
+        cmd->releaseRef();
         return WIFI_SUCCESS;
     }
 
@@ -1311,7 +1311,7 @@ wifi_error wifi_reset_significant_change_handler(wifi_request_id id, wifi_interf
     WifiCommand *cmd = wifi_unregister_cmd(handle, id);
     if (cmd) {
         cmd->cancel();
-        delete cmd;
+        cmd->releaseRef();
         return WIFI_SUCCESS;
     }
 

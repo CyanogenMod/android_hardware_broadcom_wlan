@@ -300,12 +300,13 @@ wifi_error wifi_rtt_range_cancel(wifi_request_id id,  wifi_interface_handle ifac
     RttCommand *cmd = (RttCommand *)wifi_unregister_cmd(handle, id);
     if (cmd) {
         cmd->cancel_specific(num_devices, addr);
-        delete cmd;
+        cmd->releaseRef();
         return WIFI_SUCCESS;
     }
 
     return WIFI_ERROR_INVALID_ARGS;
 }
+
 /* API to get RTT capability */
 wifi_error wifi_get_rtt_capabilities(wifi_interface_handle iface,
         wifi_rtt_capabilities *capabilities)

@@ -53,7 +53,7 @@ wifi_error wifi_register_handler(wifi_handle handle, int cmd, nl_recvmsg_msg_cb_
         info->event_cb[info->num_event_cb].cb_func = func;
         info->event_cb[info->num_event_cb].cb_arg  = arg;
         info->num_event_cb++;
-        ALOGI("Successfully added event handler %p for command %d", func, cmd);
+        ALOGI("Successfully added event handler %p:%p for command %d", arg, func, cmd);
         result = WIFI_SUCCESS;
     }
 
@@ -78,7 +78,8 @@ wifi_error wifi_register_vendor_handler(wifi_handle handle,
         info->event_cb[info->num_event_cb].cb_func = func;
         info->event_cb[info->num_event_cb].cb_arg  = arg;
         info->num_event_cb++;
-        ALOGI("Added event handler %p for vendor 0x%0x and subcmd 0x%0x", func, id, subcmd);
+        ALOGI("Added event handler %p:%p for vendor 0x%0x and subcmd 0x%0x",
+                arg, func, id, subcmd);
         result = WIFI_SUCCESS;
     }
 
@@ -99,10 +100,12 @@ void wifi_unregister_handler(wifi_handle handle, int cmd)
 
     for (int i = 0; i < info->num_event_cb; i++) {
         if (info->event_cb[i].nl_cmd == cmd) {
+            ALOGI("Successfully removed event handler %p:%p for cmd = 0x%0x",
+                    info->event_cb[i].cb_arg, info->event_cb[i].cb_func, cmd);
+
             memmove(&info->event_cb[i], &info->event_cb[i+1],
                 (info->num_event_cb - i) * sizeof(cb_info));
             info->num_event_cb--;
-            ALOGI("Successfully removed event handler for command %d", cmd);
             break;
         }
     }
@@ -121,11 +124,11 @@ void wifi_unregister_vendor_handler(wifi_handle handle, uint32_t id, int subcmd)
         if (info->event_cb[i].nl_cmd == NL80211_CMD_VENDOR
                 && info->event_cb[i].vendor_id == id
                 && info->event_cb[i].vendor_subcmd == subcmd) {
-
+            ALOGI("Successfully removed event handler %p:%p for vendor 0x%0x, subcmd = 0x%0x",
+                    info->event_cb[i].cb_arg, info->event_cb[i].cb_func, id, subcmd);
             memmove(&info->event_cb[i], &info->event_cb[i+1],
                 (info->num_event_cb - i) * sizeof(cb_info));
             info->num_event_cb--;
-            ALOGI("Successfully removed event handler for vendor 0x%0x", id);
             break;
         }
     }

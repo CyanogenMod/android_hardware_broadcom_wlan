@@ -331,13 +331,22 @@ static int internal_valid_message_handler(nl_msg *msg, void *arg)
             }
 
             cb_info *cbi = &(info->event_cb[i]);
-            (*(cbi->cb_func))(msg, cbi->cb_arg);
-            dispatched = true;
-        }
-    }
+            nl_recvmsg_msg_cb_t cb_func = cbi->cb_func;
+            void *cb_arg = cbi->cb_arg;
+            WifiCommand *cmd = (WifiCommand *)cbi->cb_arg;
+            if (cmd != NULL) {
+                cmd->addRef();
+            }
 
-    if (!dispatched) {
-        // ALOGI("event ignored!!");
+            pthread_mutex_unlock(&info->cb_lock);
+
+            (*cb_func)(msg, cb_arg);
+            if (cmd != NULL) {
+                cmd->releaseRef();
+            }
+
+            return NL_OK;
+        }
     }
 
     pthread_mutex_unlock(&info->cb_lock);

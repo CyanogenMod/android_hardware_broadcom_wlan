@@ -218,9 +218,10 @@ protected:
     Condition mCondition;
     wifi_request_id mId;
     interface_info *mIfaceInfo;
+    int mRefs;
 public:
     WifiCommand(wifi_handle handle, wifi_request_id id)
-            : mMsg(getHalInfo(handle)->nl80211_family_id), mId(id)
+            : mMsg(getHalInfo(handle)->nl80211_family_id), mId(id), mRefs(1)
     {
         mIfaceInfo = NULL;
         mInfo = getHalInfo(handle);
@@ -228,7 +229,7 @@ public:
     }
 
     WifiCommand(wifi_interface_handle iface, wifi_request_id id)
-            : mMsg(getHalInfo(iface)->nl80211_family_id, getIfaceInfo(iface)->id), mId(id)
+            : mMsg(getHalInfo(iface)->nl80211_family_id, getIfaceInfo(iface)->id), mId(id), mRefs(1)
     {
         mIfaceInfo = getIfaceInfo(iface);
         mInfo = getHalInfo(iface);
@@ -241,6 +242,20 @@ public:
 
     wifi_request_id id() {
         return mId;
+    }
+
+    virtual void addRef() {
+        int refs = __sync_add_and_fetch(&mRefs, 1);
+        // ALOGD("addRef: WifiCommand %p has %d references", this, refs);
+    }
+
+    virtual void releaseRef() {
+        int refs = __sync_sub_and_fetch(&mRefs, 1);
+        if (refs == 0) {
+            delete this;
+        } else {
+            // ALOGD("releaseRef: WifiCommand %p has %d references", this, refs);
+        }
     }
 
     virtual int create() {
