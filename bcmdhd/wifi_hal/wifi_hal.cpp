@@ -52,10 +52,11 @@ static int wifi_get_multicast_id(wifi_handle handle, const char *name, const cha
 static int wifi_add_membership(wifi_handle handle, const char *group);
 static wifi_error wifi_init_interfaces(wifi_handle handle);
 
-typedef enum wifi_feature_set_attr {
+typedef enum wifi_attr {
     ANDR_WIFI_ATTRIBUTE_NUM_FEATURE_SET,
-    ANDR_WIFI_ATTRIBUTE_FEATURE_SET
-} wifi_feature_set_attr_t;
+    ANDR_WIFI_ATTRIBUTE_FEATURE_SET,
+    ANDR_WIFI_ATTRIBUTE_PNO_RANDOM_MAC_OUI
+} wifi_attr_t;
 
 /* Initialize/Cleanup */
 
@@ -428,6 +429,65 @@ public:
 
 };
 
+class SetPnoMacAddrOuiCommand : public WifiCommand {
+
+private:
+    byte *mOui;
+    feature_set *fset;
+    feature_set *feature_matrix;
+    int *fm_size;
+    int set_size_max;
+public:
+    SetPnoMacAddrOuiCommand(wifi_interface_handle handle, oui scan_oui)
+        : WifiCommand(handle, 0)
+    {
+        mOui = scan_oui;
+    }
+
+    int createRequest(WifiRequest& request, int subcmd, byte *scan_oui) {
+        int result = request.create(GOOGLE_OUI, subcmd);
+        if (result < 0) {
+            return result;
+        }
+
+        nlattr *data = request.attr_start(NL80211_ATTR_VENDOR_DATA);
+        result = request.put(ANDR_WIFI_ATTRIBUTE_PNO_RANDOM_MAC_OUI, scan_oui, DOT11_OUI_LEN);
+        if (result < 0) {
+            return result;
+        }
+
+        request.attr_end(data);
+        return WIFI_SUCCESS;
+
+    }
+
+    int start() {
+        ALOGD("Sending mac address OUI");
+        WifiRequest request(familyId(), ifaceId());
+        int result = createRequest(request, WIFI_SUBCMD_SET_PNO_RANDOM_MAC_OUI, mOui);
+        if (result != WIFI_SUCCESS) {
+            ALOGE("failed to create request; result = %d", result);
+            return result;
+        }
+
+        result = requestResponse(request);
+        if (result != WIFI_SUCCESS) {
+            ALOGE("failed to set scanning mac OUI; result = %d", result);
+        }
+
+        return result;
+    }
+protected:
+    virtual int handleResponse(WifiEvent& reply) {
+         ALOGD("Request complete!");
+        /* Nothing to do on response! */
+        return NL_SKIP;
+    }
+
+};
+
+
+
 class GetFeatureSetCommand : public WifiCommand {
 
 private:
@@ -634,6 +694,13 @@ wifi_error wifi_get_concurrency_matrix(wifi_interface_handle handle, int set_siz
 {
     GetFeatureSetCommand command(handle, FEATURE_SET_MATRIX, NULL, set, set_size, set_size_max);
     return (wifi_error) command.requestResponse();
+}
+
+wifi_error wifi_set_scanning_mac_oui(wifi_interface_handle handle, oui scan_oui)
+{
+    SetPnoMacAddrOuiCommand command(handle, scan_oui);
+    return (wifi_error)command.start();
+
 }
 
 /////////////////////////////////////////////////////////////////////////////

@@ -948,6 +948,11 @@ public:
             return result;
         }
 
+        result = request.put_u32(GSCAN_ATTRIBUTE_LOST_AP_SAMPLE_SIZE, mParams.lost_ap_sample_size);
+        if (result < 0) {
+            return result;
+        }
+
         struct nlattr * attr = request.attr_start(GSCAN_ATTRIBUTE_HOTLIST_BSSIDS);
         for (int i = 0; i < mParams.num_ap; i++) {
             nlattr *attr2 = request.attr_start(GSCAN_ATTRIBUTE_HOTLIST_ELEM);
@@ -1003,7 +1008,8 @@ public:
         result = requestResponse(request);
         if (result < 0) {
             ALOGI("Failed to execute hotlist setup request, result = %d", result);
-            unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_HOTLIST_RESULTS);
+            unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_HOTLIST_RESULTS_FOUND);
+            unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_HOTLIST_RESULTS_LOST);
             return result;
         }
 
@@ -1013,11 +1019,13 @@ public:
             return result;
         }
 
-        registerVendorHandler(GOOGLE_OUI, GSCAN_EVENT_HOTLIST_RESULTS);
+        registerVendorHandler(GOOGLE_OUI, GSCAN_EVENT_HOTLIST_RESULTS_FOUND);
+        registerVendorHandler(GOOGLE_OUI, GSCAN_EVENT_HOTLIST_RESULTS_LOST);
 
         result = requestResponse(request);
         if (result < 0) {
-            unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_HOTLIST_RESULTS);
+            unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_HOTLIST_RESULTS_FOUND);
+            unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_HOTLIST_RESULTS_LOST);
             return result;
         }
 
@@ -1027,8 +1035,8 @@ public:
 
     virtual int cancel() {
         /* unregister event handler */
-        unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_HOTLIST_RESULTS);
-
+        unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_HOTLIST_RESULTS_FOUND);
+        unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_HOTLIST_RESULTS_LOST);
         /* create set hotlist message with empty hotlist */
         WifiRequest request(familyId(), ifaceId());
         int result = createTeardownRequest(request);
@@ -1051,8 +1059,8 @@ public:
     }
 
     virtual int handleEvent(WifiEvent& event) {
-        ALOGI("Got a hotlist ap found event");
-
+        ALOGI("Hotlist AP event");
+        int event_id = event.get_vendor_subcmd();
         // event.log();
 
         nlattr *vendor_data = event.get_attribute(NL80211_ATTR_VENDOR_DATA);
@@ -1068,9 +1076,16 @@ public:
         int num = len / sizeof(wifi_scan_result);
         num = min(MAX_RESULTS, num);
         memcpy(mResults, event.get_vendor_data(), num * sizeof(wifi_scan_result));
-        ALOGI("Retrieved %d hot APs", num);
 
-        (*mHandler.on_hotlist_ap_found)(id(), num, mResults);
+        if (event_id == GSCAN_EVENT_HOTLIST_RESULTS_FOUND) {
+            ALOGI("FOUND %d hotlist APs", num);
+            if (*mHandler.on_hotlist_ap_found)
+                (*mHandler.on_hotlist_ap_found)(id(), num, mResults);
+        } else if (event_id == GSCAN_EVENT_HOTLIST_RESULTS_LOST) {
+            ALOGI("LOST %d hotlist APs", num);
+            if (*mHandler.on_hotlist_ap_lost)
+                (*mHandler.on_hotlist_ap_lost)(id(), num, mResults);
+        }
         return NL_SKIP;
     }
 };

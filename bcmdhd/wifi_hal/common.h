@@ -14,6 +14,7 @@
 #define RECV_BUF_SIZE           (4096)
 #define DEFAULT_EVENT_CB_SIZE   (64)
 #define DEFAULT_CMD_SIZE        (64)
+#define DOT11_OUI_LEN             3
 
 /*
  Vendor OUI - This is a unique identifier that identifies organization. Lets
@@ -77,9 +78,10 @@ typedef enum {
 
     WIFI_SUBCMD_GET_FEATURE_SET,                         /* 0x100A */
     WIFI_SUBCMD_GET_FEATURE_SET_MATRIX,                  /* 0x100B */
+    WIFI_SUBCMD_SET_PNO_RANDOM_MAC_OUI,                  /* 0x100C */
     /* Add more sub commands here */
 
-    GSCAN_SUBCMD_MAX                                    /* 0x100C */
+    GSCAN_SUBCMD_MAX                                    /* 0x100D */
 
 } WIFI_SUB_COMMAND;
 
@@ -87,12 +89,12 @@ typedef enum {
     BRCM_RESERVED1,
     BRCM_RESERVED2,
     GSCAN_EVENT_SIGNIFICANT_CHANGE_RESULTS ,
-    GSCAN_EVENT_HOTLIST_RESULTS,
+    GSCAN_EVENT_HOTLIST_RESULTS_FOUND,
     GSCAN_EVENT_SCAN_RESULTS_AVAILABLE,
     GSCAN_EVENT_FULL_SCAN_RESULTS,
     RTT_EVENT_COMPLETE,
-    GSCAN_EVENT_COMPLETE_SCAN
-
+    GSCAN_EVENT_COMPLETE_SCAN,
+    GSCAN_EVENT_HOTLIST_RESULTS_LOST
 } WIFI_EVENT;
 
 typedef void (*wifi_internal_event_handler) (wifi_handle handle, int events);
