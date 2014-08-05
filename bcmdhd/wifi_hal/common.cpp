@@ -105,7 +105,7 @@ void wifi_unregister_handler(wifi_handle handle, int cmd)
                     info->event_cb[i].cb_arg, info->event_cb[i].cb_func, cmd, i);
 
             memmove(&info->event_cb[i], &info->event_cb[i+1],
-                (info->num_event_cb - i) * sizeof(cb_info));
+                (info->num_event_cb - i - 1) * sizeof(cb_info));
             info->num_event_cb--;
             break;
         }
@@ -128,7 +128,7 @@ void wifi_unregister_vendor_handler(wifi_handle handle, uint32_t id, int subcmd)
             ALOGI("Successfully removed event handler %p:%p for vendor 0x%0x, subcmd 0x%0x from %d",
                     info->event_cb[i].cb_arg, info->event_cb[i].cb_func, id, subcmd, i);
             memmove(&info->event_cb[i], &info->event_cb[i+1],
-                (info->num_event_cb - i) * sizeof(cb_info));
+                (info->num_event_cb - i - 1) * sizeof(cb_info));
             info->num_event_cb--;
             break;
         }
@@ -203,7 +203,7 @@ void wifi_unregister_cmd(wifi_handle handle, WifiCommand *cmd)
             int id = info->cmd[i].id;
             memmove(&info->cmd[i], &info->cmd[i+1], (info->num_cmd - i) * sizeof(cmd_info));
             info->num_cmd--;
-            ALOGI("Successfully removed command %d: %p", id, cmd);
+            ALOGI("Successfully removed command %d: %p from %d", id, cmd, i);
             break;
         }
     }
