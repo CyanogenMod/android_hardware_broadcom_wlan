@@ -195,7 +195,7 @@ public:
         return result;
     }
     int start() {
-        ALOGD("Setting configuration");
+        ALOGD("Setting RTT configuration");
         WifiRequest request(familyId(), ifaceId());
         int result = createSetupRequest(request);
         if (result != WIFI_SUCCESS) {
@@ -205,17 +205,17 @@ public:
 
         result = requestResponse(request);
         if (result != WIFI_SUCCESS) {
-            ALOGE("failed to configure setup; result = %d", result);
+            ALOGE("failed to configure RTT setup; result = %d", result);
             return result;
         }
 
         registerVendorHandler(GOOGLE_OUI, RTT_EVENT_COMPLETE);
-        ALOGI("successfully restarted the scan");
+        ALOGI("Successfully started RTT operation");
         return result;
     }
 
     virtual int cancel() {
-        ALOGD("Stopping scan");
+        ALOGD("Stopping RTT");
 
         WifiRequest request(familyId(), ifaceId());
         int result = createTeardownRequest(request, 0, NULL);
@@ -228,7 +228,7 @@ public:
             }
         }
 
-        unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_SCAN_RESULTS_AVAILABLE);
+        unregisterVendorHandler(GOOGLE_OUI, RTT_EVENT_COMPLETE);
         return WIFI_SUCCESS;
     }
 
@@ -242,11 +242,11 @@ public:
         } else {
             result = requestResponse(request);
             if (result != WIFI_SUCCESS) {
-                ALOGE("failed to stop scan; result = %d", result);
+                ALOGE("failed to stop RTT; result = %d", result);
             }
         }
 
-        unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_SCAN_RESULTS_AVAILABLE);
+        unregisterVendorHandler(GOOGLE_OUI, RTT_EVENT_COMPLETE);
         return WIFI_SUCCESS;
     }
 
@@ -265,9 +265,11 @@ public:
 
         if (vendor_data == NULL || len == 0) {
             ALOGI("No rtt results found");
-            return NL_SKIP;
         }
 
+        unregisterVendorHandler(GOOGLE_OUI, RTT_EVENT_COMPLETE);
+        wifi_unregister_cmd(wifiHandle(), id());
+        
         memset(rttResults, 0, sizeof(wifi_rtt_result) * MAX_RESULTS);
 
         int num = len / sizeof(wifi_rtt_result);
