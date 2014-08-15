@@ -368,7 +368,7 @@ public:
     virtual int handleEvent(WifiEvent& event) {
         ALOGI("Full scan results:  Got an event");
 
-        event.log();
+        // event.log();
 
         nlattr *vendor_data = event.get_attribute(NL80211_ATTR_VENDOR_DATA);
         unsigned int len = event.get_vendor_data_len();
