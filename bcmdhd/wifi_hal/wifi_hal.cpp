@@ -44,6 +44,7 @@
 
 #define FEATURE_SET                  0
 #define FEATURE_SET_MATRIX           1
+#define ATTR_NODFS_VALUE             3
 
 static void internal_event_handler(wifi_handle handle, int events);
 static int internal_no_seq_check(nl_msg *msg, void *arg);
@@ -483,10 +484,36 @@ protected:
         /* Nothing to do on response! */
         return NL_SKIP;
     }
-
 };
 
+class SetNodfsCommand : public WifiCommand {
 
+private:
+    u32 mNoDfs;
+public:
+    SetNodfsCommand(wifi_interface_handle handle, u32 nodfs)
+        : WifiCommand(handle, 0) {
+        mNoDfs = nodfs;
+    }
+    virtual int create() {
+        int ret;
+
+        ret = mMsg.create(GOOGLE_OUI, WIFI_SUBCMD_NODFS_SET);
+        if (ret < 0) {
+            ALOGE("Can't create message to send to driver - %d", ret);
+            return ret;
+        }
+
+        nlattr *data = mMsg.attr_start(NL80211_ATTR_VENDOR_DATA);
+        ret = mMsg.put_u32(ATTR_NODFS_VALUE, mNoDfs);
+        if (ret < 0) {
+             return ret;
+        }
+
+        mMsg.attr_end(data);
+        return WIFI_SUCCESS;
+    }
+};
 
 class GetFeatureSetCommand : public WifiCommand {
 
@@ -513,7 +540,7 @@ public:
 
         if(feature_type == FEATURE_SET) {
             ret = mMsg.create(GOOGLE_OUI, WIFI_SUBCMD_GET_FEATURE_SET);
-        } else if (feature_type == FEATURE_SET_MATRIX){
+        } else if (feature_type == FEATURE_SET_MATRIX) {
             ret = mMsg.create(GOOGLE_OUI, WIFI_SUBCMD_GET_FEATURE_SET_MATRIX);
         } else {
             ALOGE("Unknown feature type %d", feature_type);
@@ -703,5 +730,10 @@ wifi_error wifi_set_scanning_mac_oui(wifi_interface_handle handle, oui scan_oui)
 
 }
 
-/////////////////////////////////////////////////////////////////////////////
+wifi_error wifi_set_nodfs_flag(wifi_interface_handle handle, u32 nodfs)
+{
+    SetNodfsCommand command(handle, nodfs);
+    return (wifi_error) command.requestResponse();
+}
 
+/////////////////////////////////////////////////////////////////////////////

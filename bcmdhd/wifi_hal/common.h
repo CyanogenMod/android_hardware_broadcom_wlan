@@ -79,6 +79,8 @@ typedef enum {
     WIFI_SUBCMD_GET_FEATURE_SET,                         /* 0x100A */
     WIFI_SUBCMD_GET_FEATURE_SET_MATRIX,                  /* 0x100B */
     WIFI_SUBCMD_SET_PNO_RANDOM_MAC_OUI,                  /* 0x100C */
+    WIFI_SUBCMD_NODFS_SET,                               /* 0x100D */
+
     /* Add more sub commands here */
 
     GSCAN_SUBCMD_MAX                                    /* 0x100D */
