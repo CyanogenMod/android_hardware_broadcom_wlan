@@ -234,20 +234,6 @@ static int internal_pollin_handler(wifi_handle handle)
     return res;
 }
 
-static void internal_event_handler(wifi_handle handle, int events)
-{
-    if (events & POLLERR) {
-        ALOGE("Error reading from socket");
-    } else if (events & POLLHUP) {
-        ALOGE("Remote side hung up");
-    } else if (events & POLLIN) {
-        // ALOGI("Found some events!!!");
-        internal_pollin_handler(handle);
-    } else {
-        ALOGE("Unknown event - %0x", events);
-    }
-}
-
 /* Run event handler */
 void wifi_event_loop(wifi_handle handle)
 {
@@ -273,8 +259,19 @@ void wifi_event_loop(wifi_handle handle)
         int result = poll(&pfd, 1, -1);
         if (result < 0) {
             ALOGE("Error polling socket");
-        } else if (pfd.revents & (POLLIN | POLLHUP | POLLERR)) {
-            internal_event_handler(handle, pfd.revents);
+        } else if (pfd.revents & POLLERR) {
+            ALOGE("POLL Error; error no = %d", errno);
+            char buf[2048];
+            int result2 = read(pfd.fd, buf, sizeof(buf));
+            ALOGE("Read after POLL returned %d, error no = %d", result2, errno);
+        } else if (pfd.revents & POLLHUP) {
+            ALOGE("Remote side hung up");
+            break;
+        } else if (pfd.revents & POLLIN) {
+            // ALOGI("Found some events!!!");
+            internal_pollin_handler(handle);
+        } else {
+            ALOGE("Unknown event - %0x", pfd.revents);
         }
     } while (!info->clean_up);
 
