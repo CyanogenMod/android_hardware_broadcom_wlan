@@ -27,6 +27,7 @@
 
 #include <utils/Log.h>
 
+#include "wifi.h"
 #include "wifi_hal.h"
 #include "common.h"
 #include "cpp_bindings.h"
@@ -646,6 +647,22 @@ wifi_error wifi_init_interfaces(wifi_handle handle)
     hal_info *info = (hal_info *)handle;
 
     struct dirent *de;
+    int moduleflag = 0;
+    int ret = 0;
+
+    /* Check to see if the wifi driver is loaded */
+    if (!is_wifi_driver_loaded()) {
+        /* If the bcmdhd driver is built as a module,
+         * it may not be loaded at this stage. Hence
+         * we load the driver manually just for the
+         * sake of querying the interfaces.
+         */
+        ret = wifi_load_driver();
+        if (ret < 0)
+            return WIFI_ERROR_UNKNOWN;
+
+        moduleflag = 1;
+    }
 
     DIR *d = opendir("/sys/class/net");
     if (d == 0)
@@ -685,6 +702,13 @@ wifi_error wifi_init_interfaces(wifi_handle handle)
     }
 
     closedir(d);
+
+    /* Unload the wifi driver if we have loaded it previously. */
+    if (moduleflag) {
+        ret = wifi_unload_driver();
+        if (ret < 0)
+            return WIFI_ERROR_UNKNOWN;
+    }
 
     info->num_interfaces = n;
     return WIFI_SUCCESS;
