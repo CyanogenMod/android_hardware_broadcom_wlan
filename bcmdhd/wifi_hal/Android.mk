@@ -18,11 +18,7 @@ LOCAL_PATH := $(call my-dir)
 # ============================================================
 include $(CLEAR_VARS)
 
-LOCAL_REQUIRED_MODULES :=
-
-LOCAL_CFLAGS += -Wno-unused-parameter -Wno-int-to-pointer-cast
-LOCAL_CFLAGS += -Wno-maybe-uninitialized -Wno-parentheses
-LOCAL_CPPFLAGS += -Wno-conversion-null
+LOCAL_CFLAGS := -Wno-unused-parameter
 
 LOCAL_C_INCLUDES += \
 	external/libnl/include \
