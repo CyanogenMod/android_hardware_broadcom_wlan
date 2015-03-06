@@ -489,12 +489,13 @@ public:
             return result;
         }
 
-        result = request.put_u32(GSCAN_ATTRIBUTE_REPORT_THRESHOLD, mParams->report_threshold);
+        result = request.put_u32(GSCAN_ATTRIBUTE_REPORT_THRESHOLD,
+                mParams->report_threshold_percent);
         if (result < 0) {
             return result;
         }
 
-        int num_scans = 20;
+        int num_scans = mParams->report_threshold_num_scans;
         for (int i = 0; i < mParams->num_buckets; i++) {
             if (mParams->buckets[i].report_events == 1) {
                 ALOGD("Setting num_scans to 1");
@@ -774,17 +775,20 @@ wifi_error wifi_disable_full_scan_results(wifi_request_id id, wifi_interface_han
 /////////////////////////////////////////////////////////////////////////////
 
 class GetScanResultsCommand : public WifiCommand {
-    wifi_scan_result *mResults;
+    wifi_cached_scan_results *mScans;
     int mMax;
     int *mNum;
     int mRetrieved;
     byte mFlush;
     int mCompleted;
+    static const int MAX_RESULTS = 1024;
+    wifi_scan_result mScanResults[MAX_RESULTS];
+    int mNextScanResult;
 public:
     GetScanResultsCommand(wifi_interface_handle iface, byte flush,
-            wifi_scan_result *results, int max, int *num)
-        : WifiCommand(iface, -1), mResults(results), mMax(max), mNum(num),
-                mRetrieved(0), mFlush(flush), mCompleted(0)
+            wifi_cached_scan_results *results, int max, int *num)
+        : WifiCommand(iface, -1), mScans(results), mMax(max), mNum(num),
+                mRetrieved(0), mFlush(flush), mCompleted(0), mNextScanResult(0)
     { }
 
     int createRequest(WifiRequest& request, int num, byte flush) {
@@ -813,7 +817,9 @@ public:
         ALOGI("retrieving %d scan results", mMax);
 
         for (int i = 0; i < 10 && mRetrieved < mMax; i++) {
-            int result = createRequest(request, (mMax - mRetrieved), mFlush);
+            int num_to_retrieve = mMax - mRetrieved;
+            ALOGI("retrieving %d scan results in one shot", num_to_retrieve);
+            int result = createRequest(request, num_to_retrieve, mFlush);
             if (result < 0) {
                 ALOGE("failed to create request");
                 return result;
@@ -877,15 +883,18 @@ public:
                 for (nl_iterator it2(it.get()); it2.has_next(); it2.next()) {
                     int scan_id = 0, flags = 0, num = 0;
                     if (it2.get_type() == GSCAN_ATTRIBUTE_SCAN_ID) {
-                        scan_id = it.get_u32();
+                        scan_id = it2.get_u32();
+                        ALOGI("retrieved scan_id : 0x%0x", scan_id);
                     } else if (it2.get_type() == GSCAN_ATTRIBUTE_SCAN_FLAGS) {
-                        flags = it.get_u8();
+                        flags = it2.get_u8();
+                        ALOGI("retrieved scan_flags : 0x%0x", flags);
                     } else if (it2.get_type() == GSCAN_ATTRIBUTE_NUM_OF_RESULTS) {
                         num = it2.get_u32();
+                        ALOGI("retrieved num_results: %d", num);
                     } else if (it2.get_type() == GSCAN_ATTRIBUTE_SCAN_RESULTS) {
                         num = it2.get_len() / sizeof(wifi_scan_result);
-                        num = min(*mNum - mRetrieved, num);
-                        memcpy(mResults + mRetrieved, it2.get_data(),
+                        num = min(MAX_RESULTS - mNextScanResult, num);
+                        memcpy(mScanResults + mNextScanResult, it2.get_data(),
                                 sizeof(wifi_scan_result) * num);
                         ALOGI("Retrieved %d scan results", num);
                         wifi_scan_result *results = (wifi_scan_result *)it2.get_data();
@@ -896,7 +905,15 @@ public:
                                 result->bssid[3], result->bssid[4], result->bssid[5],
                                 result->rssi);
                         }
-                        mRetrieved += num;
+                        mScans[mRetrieved].scan_id = scan_id;
+                        mScans[mRetrieved].flags = flags;
+                        mScans[mRetrieved].num_results = num;
+                        mScans[mRetrieved].results = &(mScanResults[mNextScanResult]);
+                        mNextScanResult += num;
+                        mRetrieved++;
+                        if (mRetrieved >= mMax && it.has_next()) {
+                            ALOGW("Ignoring attributes after this scan");
+                        }
                     } else {
                         ALOGW("Ignoring invalid attribute type = %d, size = %d",
                                 it.get_type(), it.get_len());
@@ -913,7 +930,7 @@ public:
 };
 
 wifi_error wifi_get_cached_gscan_results(wifi_interface_handle iface, byte flush,
-        int max, wifi_scan_result *results, int *num) {
+        int max, wifi_cached_scan_results *results, int *num) {
 
     ALOGD("Getting cached scan results, iface handle = %p, num = %d", iface, *num);
 
