@@ -496,13 +496,6 @@ public:
         }
 
         int num_scans = mParams->report_threshold_num_scans;
-        for (int i = 0; i < mParams->num_buckets; i++) {
-            if (mParams->buckets[i].report_events == 1) {
-                ALOGD("Setting num_scans to 1");
-                num_scans = 1;
-                break;
-            }
-        }
 
         result = request.put_u32(GSCAN_ATTRIBUTE_NUM_SCANS_TO_CACHE, num_scans);
         if (result < 0) {
