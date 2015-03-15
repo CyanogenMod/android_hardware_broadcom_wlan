@@ -146,7 +146,7 @@ public:
             if (result < 0) {
                 return result;
             }
-            result = request.put_u8(RTT_ATTRIBUTE_TARGET_MODE, rttParams[i].continuous);
+            result = request.put_u8(RTT_ATTRIBUTE_TARGET_MODE, rttParams[i].multi_burst);
             if (result < 0) {
                 return result;
             }
@@ -155,17 +155,17 @@ public:
                 return result;
             }
             result = request.put_u32(RTT_ATTRIBUTE_TARGET_NUM_MEASUREMENT,
-                     rttParams[i].num_measurements);
+                     rttParams[i].num_burst);
             if (result < 0) {
                 return result;
             }
             result = request.put_u32(RTT_ATTRIBUTE_TARGET_NUM_PKT,
-                     rttParams[i].num_samples_per_measurement);
+                     rttParams[i].num_frames_per_burst);
             if (result < 0) {
                 return result;
             }
             result = request.put_u32(RTT_ATTRIBUTE_TARGET_NUM_RETRY,
-                     rttParams[i].num_retries_per_measurement);
+                     rttParams[i].num_retries_per_measurement_frame);
             if (result < 0) {
                 return result;
             }
