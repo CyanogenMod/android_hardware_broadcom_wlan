@@ -146,7 +146,7 @@ public:
             if (result < 0) {
                 return result;
             }
-            result = request.put_u8(RTT_ATTRIBUTE_TARGET_MODE, rttParams[i].multi_burst);
+            result = request.put_u8(RTT_ATTRIBUTE_TARGET_MODE, rttParams[i].num_burst > 0 ? 1: 0 );
             if (result < 0) {
                 return result;
             }
