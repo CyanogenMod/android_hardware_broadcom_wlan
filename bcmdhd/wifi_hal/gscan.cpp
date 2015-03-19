@@ -81,6 +81,16 @@ typedef enum {
     GSCAN_ATTRIBUTE_SIGNIFICANT_CHANGE_BSSIDS,
     GSCAN_ATTRIBUTE_SIGNIFICANT_CHANGE_FLUSH,
 
+    /* EPNO */
+    GSCAN_ATTRIBUTE_EPNO_SSID_LIST = 70,
+    GSCAN_ATTRIBUTE_EPNO_SSID,
+    GSCAN_ATTRIBUTE_EPNO_SSID_LEN,
+    GSCAN_ATTRIBUTE_EPNO_RSSI,
+    GSCAN_ATTRIBUTE_EPNO_FLAGS,
+    GSCAN_ATTRIBUTE_EPNO_AUTH,
+    GSCAN_ATTRIBUTE_EPNO_SSID_NUM,
+    GSCAN_ATTRIBUTE_EPNO_FLUSH,
+
     GSCAN_ATTRIBUTE_MAX
 
 } GSCAN_ATTRIBUTE;
@@ -1100,6 +1110,170 @@ public:
     }
 };
 
+class ePNOCommand : public WifiCommand
+{
+private:
+    wifi_epno_network *ssid_list;
+    int num_ssid;
+    wifi_epno_handler mHandler;
+    static const int MAX_RESULTS = 32;
+    wifi_scan_result mResults[MAX_RESULTS];
+public:
+    ePNOCommand(wifi_interface_handle handle, int id,
+            int num_networks, wifi_epno_network *networks, wifi_epno_handler handler)
+        : WifiCommand(handle, id), mHandler(handler)
+    {
+        ssid_list = networks;
+        num_ssid = num_networks;
+    }
+
+    int createSetupRequest(WifiRequest& request) {
+        int result = request.create(GOOGLE_OUI, GSCAN_SUBCMD_SET_EPNO_SSID);
+        if (result < 0) {
+            return result;
+        }
+
+        nlattr *data = request.attr_start(NL80211_ATTR_VENDOR_DATA);
+        result = request.put_u8(GSCAN_ATTRIBUTE_EPNO_FLUSH, 1);
+        if (result < 0) {
+            return result;
+        }
+
+        result = request.put_u8(GSCAN_ATTRIBUTE_EPNO_SSID_NUM, num_ssid);
+        if (result < 0) {
+            return result;
+        }
+
+        struct nlattr * attr = request.attr_start(GSCAN_ATTRIBUTE_EPNO_SSID_LIST);
+        for (int i = 0; i < num_ssid; i++) {
+            nlattr *attr2 = request.attr_start(i);
+            if (attr2 == NULL) {
+                return WIFI_ERROR_OUT_OF_MEMORY;
+            }
+            result = request.put(GSCAN_ATTRIBUTE_EPNO_SSID, ssid_list[i].ssid, 32);
+            ALOGI("SSID %s", ssid_list[i].ssid);
+            if (result < 0) {
+                return result;
+            }
+            result = request.put_u8(GSCAN_ATTRIBUTE_EPNO_SSID_LEN, strlen(ssid_list[i].ssid));
+            if (result < 0) {
+                return result;
+            }
+            ALOGI("rssi %d", ssid_list[i].rssi_threshold);
+            result = request.put_u8(GSCAN_ATTRIBUTE_EPNO_RSSI, ssid_list[i].rssi_threshold);
+            if (result < 0) {
+                return result;
+            }
+            ALOGI("flags %d", ssid_list[i].flags);
+            result = request.put_u8(GSCAN_ATTRIBUTE_EPNO_FLAGS, ssid_list[i].flags);
+            if (result < 0) {
+                return result;
+            }
+            result = request.put_u8(GSCAN_ATTRIBUTE_EPNO_AUTH, ssid_list[i].auth_bit_field);
+            if (result < 0) {
+                return result;
+            }
+            request.attr_end(attr2);
+        }
+
+        request.attr_end(attr);
+        request.attr_end(data);
+        return result;
+    }
+
+    int createTeardownRequest(WifiRequest& request) {
+        int result = request.create(GOOGLE_OUI, GSCAN_SUBCMD_SET_EPNO_SSID);
+        if (result < 0) {
+            return result;
+        }
+
+        nlattr *data = request.attr_start(NL80211_ATTR_VENDOR_DATA);
+        result = request.put_u8(GSCAN_ATTRIBUTE_EPNO_FLUSH, 1);
+        if (result < 0) {
+            return result;
+        }
+        request.attr_end(data);
+        return result;
+    }
+
+    int start() {
+        ALOGI("Executing ePNO setup request, num = %d", num_ssid);
+        WifiRequest request(familyId(), ifaceId());
+        int result = createSetupRequest(request);
+        if (result < 0) {
+            return result;
+        }
+
+        result = requestResponse(request);
+        if (result < 0) {
+            ALOGI("Failed to execute ePNO setup request, result = %d", result);
+            unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_EPNO_EVENT);
+            return result;
+        }
+
+        ALOGI("Successfully set %d SSIDs for ePNO", num_ssid);
+        registerVendorHandler(GOOGLE_OUI, GSCAN_EVENT_EPNO_EVENT);
+        ALOGI("successfully restarted the scan");
+        return result;
+    }
+
+    virtual int cancel() {
+        /* unregister event handler */
+        unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_EPNO_EVENT);
+        /* create set hotlist message with empty hotlist */
+        WifiRequest request(familyId(), ifaceId());
+        int result = createTeardownRequest(request);
+        if (result < 0) {
+            return result;
+        }
+
+        result = requestResponse(request);
+        if (result < 0) {
+            return result;
+        }
+
+        ALOGI("Successfully reset APs in current hotlist");
+        return result;
+    }
+
+    virtual int handleResponse(WifiEvent& reply) {
+        /* Nothing to do on response! */
+        return NL_SKIP;
+    }
+
+    virtual int handleEvent(WifiEvent& event) {
+        ALOGI("ePNO event");
+        int event_id = event.get_vendor_subcmd();
+        // event.log();
+
+        nlattr *vendor_data = event.get_attribute(NL80211_ATTR_VENDOR_DATA);
+        int len = event.get_vendor_data_len();
+
+        if (vendor_data == NULL || len == 0) {
+            ALOGI("No scan results found");
+            return NL_SKIP;
+        }
+
+        memset(mResults, 0, sizeof(wifi_scan_result) * MAX_RESULTS);
+
+        int num = len / sizeof(wifi_pno_result_t);
+        int i;
+        num = min(MAX_RESULTS, num);
+        wifi_pno_result_t *res = (wifi_pno_result_t *) event.get_vendor_data();
+        for (i = 0; i < num; i++) {
+            if (res[i].flags == PNO_SSID_FOUND) {
+                memcpy(mResults[i].ssid, res[i].ssid, res[i].ssid_len);
+                mResults[i].ssid[res[i].ssid_len] = '\0';
+                mResults[i].channel = res[i].channel;
+                mResults[i].rssi = res[i].rssi;
+            }
+        }
+        if (*mHandler.on_network_found)
+            (*mHandler.on_network_found)(id(), num, mResults);
+        return NL_SKIP;
+    }
+};
+
 wifi_error wifi_set_bssid_hotlist(wifi_request_id id, wifi_interface_handle iface,
         wifi_bssid_hotlist_params params, wifi_hotlist_ap_found_handler handler)
 {
@@ -1330,6 +1504,30 @@ wifi_error wifi_set_significant_change_handler(wifi_request_id id, wifi_interfac
 }
 
 wifi_error wifi_reset_significant_change_handler(wifi_request_id id, wifi_interface_handle iface)
+{
+    wifi_handle handle = getWifiHandle(iface);
+
+    WifiCommand *cmd = wifi_unregister_cmd(handle, id);
+    if (cmd) {
+        cmd->cancel();
+        cmd->releaseRef();
+        return WIFI_SUCCESS;
+    }
+
+    return WIFI_ERROR_INVALID_ARGS;
+}
+
+wifi_error wifi_set_epno_list(wifi_request_id id, wifi_interface_handle iface,
+        int num_networks, wifi_epno_network *networks, wifi_epno_handler handler)
+{
+     wifi_handle handle = getWifiHandle(iface);
+
+     ePNOCommand *cmd = new ePNOCommand(iface, id, num_networks, networks, handler);
+     wifi_register_cmd(handle, id, cmd);
+     return (wifi_error)cmd->start();
+}
+
+wifi_error wifi_reset_epno_list(wifi_request_id id, wifi_interface_handle iface)
 {
     wifi_handle handle = getWifiHandle(iface);
 
