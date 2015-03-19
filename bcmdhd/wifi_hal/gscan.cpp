@@ -964,7 +964,7 @@ public:
         }
 
         struct nlattr * attr = request.attr_start(GSCAN_ATTRIBUTE_HOTLIST_BSSIDS);
-        for (int i = 0; i < mParams.num_ap; i++) {
+        for (int i = 0; i < mParams.num_bssid; i++) {
             nlattr *attr2 = request.attr_start(GSCAN_ATTRIBUTE_HOTLIST_ELEM);
             if (attr2 == NULL) {
                 return WIFI_ERROR_OUT_OF_MEMORY;
@@ -1008,7 +1008,7 @@ public:
     }
 
     int start() {
-        ALOGI("Executing hotlist setup request, num = %d", mParams.num_ap);
+        ALOGI("Executing hotlist setup request, num = %d", mParams.num_bssid);
         WifiRequest request(familyId(), ifaceId());
         int result = createSetupRequest(request);
         if (result < 0) {
@@ -1023,7 +1023,7 @@ public:
             return result;
         }
 
-        ALOGI("Successfully set %d APs in the hotlist", mParams.num_ap);
+        ALOGI("Successfully set %d APs in the hotlist ", mParams.num_bssid);
         result = createFeatureRequest(request, GSCAN_SUBCMD_ENABLE_GSCAN, 1);
         if (result < 0) {
             return result;
@@ -1174,8 +1174,7 @@ public:
 
         struct nlattr * attr = request.attr_start(GSCAN_ATTRIBUTE_SIGNIFICANT_CHANGE_BSSIDS);
 
-        for (int i = 0; i < mParams.num_ap; i++) {
-
+        for (int i = 0; i < mParams.num_bssid; i++) {
             nlattr *attr2 = request.attr_start(i);
             if (attr2 == NULL) {
                 return WIFI_ERROR_OUT_OF_MEMORY;
