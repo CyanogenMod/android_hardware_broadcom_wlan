@@ -733,4 +733,10 @@ wifi_error wifi_set_nodfs_flag(wifi_interface_handle handle, u32 nodfs)
     return (wifi_error) command.requestResponse();
 }
 
+wifi_error wifi_start_logging(wifi_interface_handle iface, u32 verbose_level, u32 flags,
+        u32 max_interval_sec, u32 min_data_size, u8 *buffer_name,
+        wifi_ring_buffer_data_handler handler) {
+            return WIFI_ERROR_NOT_SUPPORTED;
+}
+
 /////////////////////////////////////////////////////////////////////////////
