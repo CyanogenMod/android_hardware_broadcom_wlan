@@ -26,6 +26,8 @@ LOCAL_CPPFLAGS += -Wno-conversion-null
 
 LOCAL_C_INCLUDES += \
 	external/libnl/include \
+   	external/stlport/stlport \
+    	bionic \
 	$(call include-path-for, libhardware_legacy)/hardware_legacy \
 	external/wpa_supplicant_8/src/drivers
 
