@@ -80,7 +80,7 @@ typedef enum {
     WIFI_SUBCMD_GET_FEATURE_SET_MATRIX,                  /* 0x100B */
     WIFI_SUBCMD_SET_PNO_RANDOM_MAC_OUI,                  /* 0x100C */
     WIFI_SUBCMD_NODFS_SET,                               /* 0x100D */
-    WIFI_SUBCMD_SET_COUNTRY,                              /* 0x100E */
+    WIFI_SUBCMD_SET_COUNTRY_CODE,                             /* 0x100E */
     /* Add more sub commands here */
     GSCAN_SUBCMD_SET_EPNO_SSID,                          /* 0x100F */
     GSCAN_SUBCMD_MAX                                    /* 0x100D */
