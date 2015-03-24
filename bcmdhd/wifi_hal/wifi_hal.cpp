@@ -1,4 +1,3 @@
-#include <errno.h>
 #include <stdint.h>
 #include <fcntl.h>
 #include <sys/socket.h>
@@ -45,6 +44,7 @@
 #define FEATURE_SET                  0
 #define FEATURE_SET_MATRIX           1
 #define ATTR_NODFS_VALUE             3
+#define ATTR_COUNTRY_CODE            4
 
 static void internal_event_handler(wifi_handle handle, int events);
 static int internal_no_seq_check(nl_msg *msg, void *arg);
@@ -512,6 +512,35 @@ public:
     }
 };
 
+class SetCountryCodeCommand : public WifiCommand {
+private:
+    const char *mCountryCode;
+public:
+    SetCountryCodeCommand(wifi_interface_handle handle, const char *country_code)
+        : WifiCommand(handle, 0) {
+        mCountryCode = country_code;
+        }
+    virtual int create() {
+        int ret;
+
+        ret = mMsg.create(GOOGLE_OUI, WIFI_SUBCMD_SET_COUNTRY_CODE);
+        if (ret < 0) {
+             ALOGE("Can't create message to send to driver - %d", ret);
+             return ret;
+        }
+
+        nlattr *data = mMsg.attr_start(NL80211_ATTR_VENDOR_DATA);
+        ret = mMsg.put_string(ATTR_COUNTRY_CODE, mCountryCode);
+        if (ret < 0) {
+            return ret;
+        }
+
+        mMsg.attr_end(data);
+        return WIFI_SUCCESS;
+
+    }
+};
+
 class GetFeatureSetCommand : public WifiCommand {
 
 private:
@@ -730,6 +759,18 @@ wifi_error wifi_set_scanning_mac_oui(wifi_interface_handle handle, oui scan_oui)
 wifi_error wifi_set_nodfs_flag(wifi_interface_handle handle, u32 nodfs)
 {
     SetNodfsCommand command(handle, nodfs);
+    return (wifi_error) command.requestResponse();
+}
+
+wifi_error wifi_start_logging(wifi_interface_handle iface, u32 verbose_level, u32 flags,
+        u32 max_interval_sec, u32 min_data_size, u8 *buffer_name,
+        wifi_ring_buffer_data_handler handler) {
+            return WIFI_ERROR_NOT_SUPPORTED;
+}
+
+wifi_error wifi_set_country_code(wifi_interface_handle handle, const char *country_code)
+{
+    SetCountryCodeCommand command(handle, country_code);
     return (wifi_error) command.requestResponse();
 }
 

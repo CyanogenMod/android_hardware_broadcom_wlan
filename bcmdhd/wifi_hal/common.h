@@ -80,9 +80,9 @@ typedef enum {
     WIFI_SUBCMD_GET_FEATURE_SET_MATRIX,                  /* 0x100B */
     WIFI_SUBCMD_SET_PNO_RANDOM_MAC_OUI,                  /* 0x100C */
     WIFI_SUBCMD_NODFS_SET,                               /* 0x100D */
-
+    WIFI_SUBCMD_SET_COUNTRY_CODE,                             /* 0x100E */
     /* Add more sub commands here */
-
+    GSCAN_SUBCMD_SET_EPNO_SSID,                          /* 0x100F */
     GSCAN_SUBCMD_MAX                                    /* 0x100D */
 
 } WIFI_SUB_COMMAND;
@@ -96,7 +96,8 @@ typedef enum {
     GSCAN_EVENT_FULL_SCAN_RESULTS,
     RTT_EVENT_COMPLETE,
     GSCAN_EVENT_COMPLETE_SCAN,
-    GSCAN_EVENT_HOTLIST_RESULTS_LOST
+    GSCAN_EVENT_HOTLIST_RESULTS_LOST,
+    GSCAN_EVENT_EPNO_EVENT
 } WIFI_EVENT;
 
 typedef void (*wifi_internal_event_handler) (wifi_handle handle, int events);
@@ -149,6 +150,17 @@ typedef struct {
 
     // add other details
 } hal_info;
+
+#define PNO_SSID_FOUND  0x1
+#define PNO_SSID_LOST    0x2
+
+typedef struct wifi_pno_result {
+    unsigned char ssid[32];
+    unsigned char ssid_len;
+    char rssi;
+    u16 channel;
+    u16 flags;
+} wifi_pno_result_t;
 
 wifi_error wifi_register_handler(wifi_handle handle, int cmd, nl_recvmsg_msg_cb_t func, void *arg);
 wifi_error wifi_register_vendor_handler(wifi_handle handle,
