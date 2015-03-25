@@ -8,6 +8,7 @@
 #include <netpacket/packet.h>
 #include <linux/filter.h>
 #include <linux/errqueue.h>
+#include <errno.h>
 
 #include <linux/pkt_sched.h>
 #include <netlink/object-api.h>
