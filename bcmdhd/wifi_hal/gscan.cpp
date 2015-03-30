@@ -784,7 +784,7 @@ class GetScanResultsCommand : public WifiCommand {
     int mRetrieved;
     byte mFlush;
     int mCompleted;
-    static const int MAX_RESULTS = 1024;
+    static const int MAX_RESULTS = 320;
     wifi_scan_result mScanResults[MAX_RESULTS];
     int mNextScanResult;
 public:
@@ -897,6 +897,7 @@ public:
                     } else if (it2.get_type() == GSCAN_ATTRIBUTE_SCAN_RESULTS) {
                         num = it2.get_len() / sizeof(wifi_scan_result);
                         num = min(MAX_RESULTS - mNextScanResult, num);
+                        num = min((int)MAX_AP_CACHE_PER_SCAN, num);
                         memcpy(mScanResults + mNextScanResult, it2.get_data(),
                                 sizeof(wifi_scan_result) * num);
                         ALOGI("Retrieved %d scan results", num);
@@ -911,7 +912,8 @@ public:
                         mScans[mRetrieved].scan_id = scan_id;
                         mScans[mRetrieved].flags = flags;
                         mScans[mRetrieved].num_results = num;
-                        mScans[mRetrieved].results = &(mScanResults[mNextScanResult]);
+                        memcpy(mScans[mRetrieved].results,
+                                &(mScanResults[mNextScanResult]), num * sizeof(wifi_scan_result));
                         mNextScanResult += num;
                         mRetrieved++;
                         if (mRetrieved >= mMax && it.has_next()) {
@@ -938,7 +940,9 @@ wifi_error wifi_get_cached_gscan_results(wifi_interface_handle iface, byte flush
     ALOGD("Getting cached scan results, iface handle = %p, num = %d", iface, *num);
 
     GetScanResultsCommand *cmd = new GetScanResultsCommand(iface, flush, results, max, num);
-    return (wifi_error)cmd->execute();
+    wifi_error err = (wifi_error) cmd->execute();
+    delete cmd;
+    return err;
 }
 
 /////////////////////////////////////////////////////////////////////////////
