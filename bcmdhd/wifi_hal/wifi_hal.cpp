@@ -100,6 +100,41 @@ static nl_sock * wifi_create_nl_socket(int port)
     return sock;
 }
 
+/*initialize function pointer table with Broadcom HHAL API*/
+wifi_error init_wifi_vendor_hal_func_table(wifi_hal_fn *fn)
+{
+    if (fn == NULL) {
+        return WIFI_ERROR_UNKNOWN;
+    }
+    fn->wifi_initialize = wifi_initialize;
+    fn->wifi_cleanup = wifi_cleanup;
+    fn->wifi_event_loop = wifi_event_loop;
+    fn->wifi_get_supported_feature_set = wifi_get_supported_feature_set;
+    fn->wifi_get_concurrency_matrix = wifi_get_concurrency_matrix;
+    fn->wifi_set_scanning_mac_oui =  wifi_set_scanning_mac_oui;
+    fn->wifi_get_ifaces = wifi_get_ifaces;
+    fn->wifi_get_iface_name = wifi_get_iface_name;
+    fn->wifi_start_gscan = wifi_start_gscan;
+    fn->wifi_stop_gscan = wifi_stop_gscan;
+    fn->wifi_get_cached_gscan_results = wifi_get_cached_gscan_results;
+    fn->wifi_set_bssid_hotlist = wifi_set_bssid_hotlist;
+    fn->wifi_reset_bssid_hotlist = wifi_reset_bssid_hotlist;
+    fn->wifi_set_significant_change_handler = wifi_set_significant_change_handler;
+    fn->wifi_reset_significant_change_handler = wifi_reset_significant_change_handler;
+    fn->wifi_get_gscan_capabilities = wifi_get_gscan_capabilities;
+    fn->wifi_get_link_stats = wifi_get_link_stats;
+    fn->wifi_get_valid_channels = wifi_get_valid_channels;
+    fn->wifi_rtt_range_request = wifi_rtt_range_request;
+    fn->wifi_rtt_range_cancel = wifi_rtt_range_cancel;
+    fn->wifi_get_rtt_capabilities = wifi_get_rtt_capabilities;
+    fn->wifi_set_nodfs_flag = wifi_set_nodfs_flag;
+    fn->wifi_start_logging = wifi_start_logging;
+    fn->wifi_set_epno_list = wifi_set_epno_list;
+    fn->wifi_set_country_code = wifi_set_country_code;
+
+    return WIFI_SUCCESS;
+}
+
 wifi_error wifi_initialize(wifi_handle *handle)
 {
     srand(getpid());
