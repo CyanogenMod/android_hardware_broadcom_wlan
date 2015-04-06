@@ -231,7 +231,7 @@ public:
             }
 
             result = request.put_u32(RTT_ATTRIBUTE_TARGET_NUM_RETRY_FTM,
-                    rttParams[i].num_retries_per_measurement_frame);
+                    rttParams[i].num_retries_per_rtt_frame);
             if (result < 0) {
                 return result;
             }
@@ -243,7 +243,7 @@ public:
             }
 
             result = request.put_u32(RTT_ATTRIBUTE_TARGET_BURST_TIMEOUT,
-                    rttParams[i].burst_timeout);
+                    rttParams[i].burst_duration);
             if (result < 0) {
                 return result;
             }
