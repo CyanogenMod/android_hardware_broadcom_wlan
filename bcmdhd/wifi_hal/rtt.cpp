@@ -44,14 +44,14 @@ typedef enum {
     RTT_ATTRIBUTE_TARGET_TYPE,
     RTT_ATTRIBUTE_TARGET_PEER,
     RTT_ATTRIBUTE_TARGET_CHAN,
-    RTT_ATTRIBUTE_TARGET_INTERVAL,
+    RTT_ATTRIBUTE_TARGET_PERIOD,
     RTT_ATTRIBUTE_TARGET_NUM_BURST,
     RTT_ATTRIBUTE_TARGET_NUM_FTM_BURST,
     RTT_ATTRIBUTE_TARGET_NUM_RETRY_FTM,
     RTT_ATTRIBUTE_TARGET_NUM_RETRY_FTMR,
     RTT_ATTRIBUTE_TARGET_LCI,
     RTT_ATTRIBUTE_TARGET_LCR,
-    RTT_ATTRIBUTE_TARGET_BURST_TIMEOUT,
+    RTT_ATTRIBUTE_TARGET_BURST_DURATION,
     RTT_ATTRIBUTE_TARGET_PREAMBLE,
     RTT_ATTRIBUTE_TARGET_BW,
     RTT_ATTRIBUTE_RESULTS_COMPLETE = 30,
@@ -179,6 +179,14 @@ public:
         totalCnt = 0;
     }
 
+    RttCommand(wifi_interface_handle iface, int id)
+        : WifiCommand(iface, id)
+    {
+        currentIdx = 0;
+        mCompleted = 0;
+        totalCnt = 0;
+        numRttParams = 0;
+    }
 
     int createSetupRequest(WifiRequest& request) {
         int result = request.create(GOOGLE_OUI, RTT_SUBCMD_SET_CONFIG);
@@ -242,7 +250,13 @@ public:
                 return result;
             }
 
-            result = request.put_u32(RTT_ATTRIBUTE_TARGET_BURST_TIMEOUT,
+            result = request.put_u32(RTT_ATTRIBUTE_TARGET_PERIOD,
+                    rttParams[i].burst_period);
+            if (result < 0) {
+                return result;
+            }
+
+            result = request.put_u32(RTT_ATTRIBUTE_TARGET_BURST_DURATION,
                     rttParams[i].burst_duration);
             if (result < 0) {
                 return result;
@@ -335,7 +349,7 @@ public:
     }
 
     int cancel_specific(unsigned num_devices, mac_addr addr[]) {
-        ALOGD("Stopping scan");
+        ALOGE("Stopping RTT");
 
         WifiRequest request(familyId(), ifaceId());
         int result = createTeardownRequest(request, num_devices, addr);
@@ -431,12 +445,13 @@ public:
                         ALOGI("retrived rtt_result : \n\tburst_num :%d, measurement_number : %d, success_number : %d\n"
                                 "\tnumber_per_burst_peer : %d, status : %s, retry_after_duration : %d s\n"
                                 "\trssi : %d dbm, rx_rate : %d Kbps, rtt : %llu ns, rtt_sd : %llu\n"
-                                "\tdistance : %d, burst_duration : %d ms\n",
+                                "\tdistance : %d, burst_duration : %d ms, negotiated_burst_num : %d\n",
                                 rtt_result->burst_num, rtt_result->measurement_number,
                                 rtt_result->success_number, rtt_result->number_per_burst_peer,
                                 get_err_info(rtt_result->status), rtt_result->retry_after_duration,
                                 rtt_result->rssi, rtt_result->rx_rate.bitrate * 100,
-                                rtt_result->rtt/10, rtt_result->rtt_sd, rtt_result->distance, rtt_result->burst_duration);
+                                rtt_result->rtt/10, rtt_result->rtt_sd, rtt_result->distance,
+                                rtt_result->burst_duration, rtt_result->negotiated_burst_num);
                         currentIdx++;
                     }
                 }
@@ -445,7 +460,6 @@ public:
         }
         if (mCompleted) {
             unregisterVendorHandler(GOOGLE_OUI, RTT_EVENT_COMPLETE);
-            wifi_unregister_cmd(wifiHandle(), id());
             (*rttHandler.on_rtt_results)(id(), totalCnt, rttResults);
             for (int i = 0; i < currentIdx; i++) {
                 free(rttResults[i]);
@@ -474,13 +488,12 @@ wifi_error wifi_rtt_range_cancel(wifi_request_id id,  wifi_interface_handle ifac
         unsigned num_devices, mac_addr addr[])
 {
     wifi_handle handle = getWifiHandle(iface);
-    RttCommand *cmd = (RttCommand *)wifi_unregister_cmd(handle, id);
+    RttCommand *cmd = new RttCommand(iface, id);
     if (cmd) {
         cmd->cancel_specific(num_devices, addr);
         cmd->releaseRef();
         return WIFI_SUCCESS;
     }
-
     return WIFI_ERROR_INVALID_ARGS;
 }
 
