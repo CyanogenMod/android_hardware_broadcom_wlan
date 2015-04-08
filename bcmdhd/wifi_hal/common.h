@@ -93,9 +93,11 @@ typedef enum {
     WIFI_SUBCMD_ENABLE_LAZY_ROAM,                       /* 0x1012 */
     WIFI_SUBCMD_SET_BSSID_PREF,                         /* 0x1013 */
     WIFI_SUBCMD_SET_BSSID_BLACKLIST,                     /* 0x1014 */
+
+    GSCAN_SUBCMD_ANQPO_CONFIG,                          /* 0x1015 */
     /* Add more sub commands here */
 
-    GSCAN_SUBCMD_MAX                                    /* 0x1015 */
+    GSCAN_SUBCMD_MAX
 
 } WIFI_SUB_COMMAND;
 
@@ -110,8 +112,9 @@ typedef enum {
     GSCAN_EVENT_COMPLETE_SCAN,
     GSCAN_EVENT_HOTLIST_RESULTS_LOST,
     GSCAN_EVENT_EPNO_EVENT,
+    GSCAN_EVENT_ANQPO_HOTSPOT_MATCH,
     GOOGLE_DEBUG_RING_EVENT,
-    GOOGLE_DEBUG_MEM_DUMP_EVENT,
+    GOOGLE_DEBUG_MEM_DUMP_EVENT
 } WIFI_EVENT;
 
 typedef void (*wifi_internal_event_handler) (wifi_handle handle, int events);
