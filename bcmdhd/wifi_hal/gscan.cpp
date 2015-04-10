@@ -376,7 +376,7 @@ public:
     }
 
     virtual int handleEvent(WifiEvent& event) {
-        ALOGI("Full scan results:  Got an event");
+        //ALOGI("Full scan results:  Got an event");
 
         // event.log();
 
@@ -384,7 +384,7 @@ public:
         unsigned int len = event.get_vendor_data_len();
 
         if (vendor_data == NULL || len < sizeof(wifi_scan_result)) {
-            ALOGI("No scan results found");
+            ALOGI("Full scan results: No scan results found");
             return NL_SKIP;
         }
 
@@ -393,17 +393,10 @@ public:
         if(*mHandler.on_full_scan_result)
             (*mHandler.on_full_scan_result)(id(), result);
 
-        ALOGI("%-32s\t", result->ssid);
-
-        ALOGI("%02x:%02x:%02x:%02x:%02x:%02x ", result->bssid[0], result->bssid[1],
-                result->bssid[2], result->bssid[3], result->bssid[4], result->bssid[5]);
-
-        ALOGI("%d\t", result->rssi);
-        ALOGI("%d\t", result->channel);
-        ALOGI("%lld\t", result->ts);
-        ALOGI("%lld\t", result->rtt);
-        ALOGI("%lld\n", result->rtt_sd);
-
+        ALOGI("Full scan result: %-32s %02x:%02x:%02x:%02x:%02x:%02x %d %d %lld %lld %lld\n",
+            result->ssid, result->bssid[0], result->bssid[1], result->bssid[2], result->bssid[3],
+            result->bssid[4], result->bssid[5], result->rssi, result->channel, result->ts,
+            result->rtt, result->rtt_sd);
 
         return NL_SKIP;
     }
@@ -468,11 +461,15 @@ public:
             if (result < 0) {
                 return result;
             }
+            ALOGI("bucket %u: period %u band %u report %u", i, mParams->buckets[i].period, mParams->buckets[i].band, mParams->buckets[i].report_events, mParams->buckets[i].num_channels);
 
             if (mParams->buckets[i].num_channels) {
                 nlattr *channels = request.attr_start(GSCAN_ATTRIBUTE_BUCKET_CHANNELS);
+                ALOGI(" channels: ");
                 for (int j = 0; j < mParams->buckets[i].num_channels; j++) {
                     result = request.put_u32(j, mParams->buckets[i].channels[j].channel);
+                    ALOGI(" %u", mParams->buckets[i].channels[j].channel);
+
                     if (result < 0) {
                         return result;
                     }
@@ -527,13 +524,14 @@ public:
     int enableFullScanResultsIfRequired() {
         /* temporary workaround till we have full support for per bucket scans */
 
-        ALOGI("enabling full scan results if needed");
         int nBuckets = 0;
         for (int i = 0; i < mParams->num_buckets; i++) {
             if (mParams->buckets[i].report_events == 2) {
                 nBuckets++;
             }
         }
+        ALOGI("enableFullScanResultsIfRequired num %u needed %u global %u",
+            mParams->num_buckets, nBuckets, mGlobalFullScanBuckets);
 
         if (mGlobalFullScanBuckets == 0 && nBuckets != 0) {
             int result = wifi_enable_full_scan_results(0x1000, ifaceHandle(), mHandler);
@@ -573,7 +571,7 @@ public:
     }
 
     int start() {
-        ALOGD("Setting configuration");
+        ALOGD("GSCAN start");
         WifiRequest request(familyId(), ifaceId());
         int result = createSetupRequest(request);
         if (result != WIFI_SUCCESS) {
@@ -601,7 +599,7 @@ public:
             return result;
         }
 
-        ALOGD("Starting scan");
+        ALOGD(" ....starting scan");
 
         result = createStartRequest(request);
         if (result != WIFI_SUCCESS) {
@@ -784,7 +782,7 @@ class GetScanResultsCommand : public WifiCommand {
     int mRetrieved;
     byte mFlush;
     int mCompleted;
-    static const int MAX_RESULTS = 1024;
+    static const int MAX_RESULTS = 320;
     wifi_scan_result mScanResults[MAX_RESULTS];
     int mNextScanResult;
 public:
@@ -897,6 +895,7 @@ public:
                     } else if (it2.get_type() == GSCAN_ATTRIBUTE_SCAN_RESULTS) {
                         num = it2.get_len() / sizeof(wifi_scan_result);
                         num = min(MAX_RESULTS - mNextScanResult, num);
+                        num = min((int)MAX_AP_CACHE_PER_SCAN, num);
                         memcpy(mScanResults + mNextScanResult, it2.get_data(),
                                 sizeof(wifi_scan_result) * num);
                         ALOGI("Retrieved %d scan results", num);
@@ -911,7 +910,8 @@ public:
                         mScans[mRetrieved].scan_id = scan_id;
                         mScans[mRetrieved].flags = flags;
                         mScans[mRetrieved].num_results = num;
-                        mScans[mRetrieved].results = &(mScanResults[mNextScanResult]);
+                        memcpy(mScans[mRetrieved].results,
+                                &(mScanResults[mNextScanResult]), num * sizeof(wifi_scan_result));
                         mNextScanResult += num;
                         mRetrieved++;
                         if (mRetrieved >= mMax && it.has_next()) {
@@ -938,7 +938,9 @@ wifi_error wifi_get_cached_gscan_results(wifi_interface_handle iface, byte flush
     ALOGD("Getting cached scan results, iface handle = %p, num = %d", iface, *num);
 
     GetScanResultsCommand *cmd = new GetScanResultsCommand(iface, flush, results, max, num);
-    return (wifi_error)cmd->execute();
+    wifi_error err = (wifi_error) cmd->execute();
+    delete cmd;
+    return err;
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -1151,7 +1153,9 @@ public:
                 return WIFI_ERROR_OUT_OF_MEMORY;
             }
             result = request.put(GSCAN_ATTRIBUTE_EPNO_SSID, ssid_list[i].ssid, 32);
-            ALOGI("SSID %s", ssid_list[i].ssid);
+            ALOGI("PNO network: SSID %s rssi_thresh %d flags %d auth %d", ssid_list[i].ssid,
+                (signed char)ssid_list[i].rssi_threshold, ssid_list[i].flags,
+                ssid_list[i].auth_bit_field);
             if (result < 0) {
                 return result;
             }
@@ -1159,12 +1163,10 @@ public:
             if (result < 0) {
                 return result;
             }
-            ALOGI("rssi %d", ssid_list[i].rssi_threshold);
             result = request.put_u8(GSCAN_ATTRIBUTE_EPNO_RSSI, ssid_list[i].rssi_threshold);
             if (result < 0) {
                 return result;
             }
-            ALOGI("flags %d", ssid_list[i].flags);
             result = request.put_u8(GSCAN_ATTRIBUTE_EPNO_FLAGS, ssid_list[i].flags);
             if (result < 0) {
                 return result;
