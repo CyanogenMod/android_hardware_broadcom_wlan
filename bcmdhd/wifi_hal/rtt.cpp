@@ -466,6 +466,9 @@ public:
                 rttResults[i] = NULL;
             }
             totalCnt = currentIdx = 0;
+            WifiCommand *cmd = wifi_unregister_cmd(wifiHandle(), id());
+            if (cmd)
+                cmd->releaseRef();
         }
         return NL_SKIP;
     }
