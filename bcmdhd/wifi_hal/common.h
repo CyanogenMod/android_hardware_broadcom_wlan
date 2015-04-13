@@ -157,7 +157,7 @@ typedef struct {
 typedef struct wifi_pno_result {
     unsigned char ssid[32];
     unsigned char ssid_len;
-    char rssi;
+    signed char rssi;
     u16 channel;
     u16 flags;
 } wifi_pno_result_t;
