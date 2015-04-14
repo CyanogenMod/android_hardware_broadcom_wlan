@@ -1519,16 +1519,6 @@ wifi_error wifi_reset_significant_change_handler(wifi_request_id id, wifi_interf
     return WIFI_ERROR_INVALID_ARGS;
 }
 
-wifi_error wifi_set_epno_list(wifi_request_id id, wifi_interface_handle iface,
-        int num_networks, wifi_epno_network *networks, wifi_epno_handler handler)
-{
-     wifi_handle handle = getWifiHandle(iface);
-
-     ePNOCommand *cmd = new ePNOCommand(iface, id, num_networks, networks, handler);
-     wifi_register_cmd(handle, id, cmd);
-     return (wifi_error)cmd->start();
-}
-
 wifi_error wifi_reset_epno_list(wifi_request_id id, wifi_interface_handle iface)
 {
     wifi_handle handle = getWifiHandle(iface);
@@ -1542,3 +1532,20 @@ wifi_error wifi_reset_epno_list(wifi_request_id id, wifi_interface_handle iface)
 
     return WIFI_ERROR_INVALID_ARGS;
 }
+
+wifi_error wifi_set_epno_list(wifi_request_id id, wifi_interface_handle iface,
+        int num_networks, wifi_epno_network *networks, wifi_epno_handler handler)
+{
+
+     if (num_networks == 0 || networks == NULL) {
+         return wifi_reset_epno_list(id, iface);
+     }
+
+     wifi_handle handle = getWifiHandle(iface);
+
+     ePNOCommand *cmd = new ePNOCommand(iface, id, num_networks, networks, handler);
+     wifi_register_cmd(handle, id, cmd);
+     return (wifi_error)cmd->start();
+}
+
+
