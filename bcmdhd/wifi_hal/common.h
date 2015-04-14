@@ -55,6 +55,10 @@ typedef enum {
     ANDROID_NL80211_SUBCMD_LSTATS_RANGE_START = 0x1200,
     ANDROID_NL80211_SUBCMD_LSTATS_RANGE_END   = 0x12FF,
 
+    /* define all Logger related commands between 0x1400 and 0x14FF */
+    ANDROID_NL80211_SUBCMD_DEBUG_RANGE_START = 0x1400,
+    ANDROID_NL80211_SUBCMD_DEBUG_RANGE_END   = 0x14FF,
+
     /* This is reserved for future usage */
 
 } ANDROID_VENDOR_SUB_COMMAND;
@@ -105,7 +109,9 @@ typedef enum {
     RTT_EVENT_COMPLETE,
     GSCAN_EVENT_COMPLETE_SCAN,
     GSCAN_EVENT_HOTLIST_RESULTS_LOST,
-    GSCAN_EVENT_EPNO_EVENT
+    GSCAN_EVENT_EPNO_EVENT,
+    GOOGLE_DEBUG_RING_EVENT,
+    GOOGLE_DEBUG_MEM_DUMP_EVENT,
 } WIFI_EVENT;
 
 typedef void (*wifi_internal_event_handler) (wifi_handle handle, int events);
