@@ -83,7 +83,15 @@ typedef enum {
     WIFI_SUBCMD_SET_COUNTRY_CODE,                             /* 0x100E */
     /* Add more sub commands here */
     GSCAN_SUBCMD_SET_EPNO_SSID,                          /* 0x100F */
-    GSCAN_SUBCMD_MAX                                    /* 0x100D */
+
+    WIFI_SUBCMD_SET_SSID_WHITE_LIST,                    /* 0x1010 */
+    WIFI_SUBCMD_SET_ROAM_PARAMS,                        /* 0x1011 */
+    WIFI_SUBCMD_ENABLE_LAZY_ROAM,                       /* 0x1012 */
+    WIFI_SUBCMD_SET_BSSID_PREF,                         /* 0x1013 */
+    WIFI_SUBCMD_SET_BSSID_BLACKLIST,                     /* 0x1014 */
+    /* Add more sub commands here */
+
+    GSCAN_SUBCMD_MAX                                    /* 0x1015 */
 
 } WIFI_SUB_COMMAND;
 
