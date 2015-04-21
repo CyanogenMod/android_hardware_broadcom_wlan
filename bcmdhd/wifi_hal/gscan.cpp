@@ -493,10 +493,10 @@ public:
 
             if (mParams->buckets[i].num_channels) {
                 nlattr *channels = request.attr_start(GSCAN_ATTRIBUTE_BUCKET_CHANNELS);
-                ALOGI(" channels: ");
+                ALOGV(" channels: ");
                 for (int j = 0; j < mParams->buckets[i].num_channels; j++) {
                     result = request.put_u32(j, mParams->buckets[i].channels[j].channel);
-                    ALOGI(" %u", mParams->buckets[i].channels[j].channel);
+                    ALOGV(" %u", mParams->buckets[i].channels[j].channel);
 
                     if (result < 0) {
                         return result;
@@ -907,30 +907,30 @@ public:
         for (nl_iterator it(vendor_data); it.has_next(); it.next()) {
             if (it.get_type() == GSCAN_ATTRIBUTE_SCAN_RESULTS_COMPLETE) {
                 mCompleted = it.get_u8();
-                ALOGI("retrieved mCompleted flag : %d", mCompleted);
+                ALOGV("retrieved mCompleted flag : %d", mCompleted);
             } else if (it.get_type() == GSCAN_ATTRIBUTE_SCAN_RESULTS || it.get_type() == 0) {
                 for (nl_iterator it2(it.get()); it2.has_next(); it2.next()) {
                     int scan_id = 0, flags = 0, num = 0;
                     if (it2.get_type() == GSCAN_ATTRIBUTE_SCAN_ID) {
                         scan_id = it2.get_u32();
-                        ALOGI("retrieved scan_id : 0x%0x", scan_id);
+                        ALOGV("retrieved scan_id : 0x%0x", scan_id);
                     } else if (it2.get_type() == GSCAN_ATTRIBUTE_SCAN_FLAGS) {
                         flags = it2.get_u8();
-                        ALOGI("retrieved scan_flags : 0x%0x", flags);
+                        ALOGV("retrieved scan_flags : 0x%0x", flags);
                     } else if (it2.get_type() == GSCAN_ATTRIBUTE_NUM_OF_RESULTS) {
                         num = it2.get_u32();
-                        ALOGI("retrieved num_results: %d", num);
+                        ALOGV("retrieved num_results: %d", num);
                     } else if (it2.get_type() == GSCAN_ATTRIBUTE_SCAN_RESULTS) {
                         num = it2.get_len() / sizeof(wifi_scan_result);
                         num = min(MAX_RESULTS - mNextScanResult, num);
                         num = min((int)MAX_AP_CACHE_PER_SCAN, num);
                         memcpy(mScanResults + mNextScanResult, it2.get_data(),
                                 sizeof(wifi_scan_result) * num);
-                        ALOGI("Retrieved %d scan results", num);
+                        ALOGV("Retrieved %d scan results", num);
                         wifi_scan_result *results = (wifi_scan_result *)it2.get_data();
                         for (int i = 0; i < num; i++) {
                             wifi_scan_result *result = results + i;
-                            ALOGI("%02d  %-32s  %02x:%02x:%02x:%02x:%02x:%02x  %04d", i,
+                            ALOGV("%02d  %-32s  %02x:%02x:%02x:%02x:%02x:%02x  %04d", i,
                                 result->ssid, result->bssid[0], result->bssid[1], result->bssid[2],
                                 result->bssid[3], result->bssid[4], result->bssid[5],
                                 result->rssi);

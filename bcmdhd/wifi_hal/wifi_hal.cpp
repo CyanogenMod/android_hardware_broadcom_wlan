@@ -342,13 +342,13 @@ static int internal_valid_message_handler(nl_msg *msg, void *arg)
     if (cmd == NL80211_CMD_VENDOR) {
         vendor_id = event.get_u32(NL80211_ATTR_VENDOR_ID);
         subcmd = event.get_u32(NL80211_ATTR_VENDOR_SUBCMD);
-        ALOGI("event received %s, vendor_id = 0x%0x, subcmd = 0x%0x",
+        ALOGV("event received %s, vendor_id = 0x%0x, subcmd = 0x%0x",
                 event.get_cmdString(), vendor_id, subcmd);
     } else {
-        // ALOGI("event received %s", event.get_cmdString());
+        // ALOGV("event received %s", event.get_cmdString());
     }
 
-    // ALOGI("event received %s, vendor_id = 0x%0x", event.get_cmdString(), vendor_id);
+    // ALOGV("event received %s, vendor_id = 0x%0x", event.get_cmdString(), vendor_id);
     // event.log();
 
     bool dispatched = false;
@@ -619,7 +619,7 @@ public:
 protected:
     virtual int handleResponse(WifiEvent& reply) {
 
-        ALOGD("In GetFeatureSetCommand::handleResponse");
+        ALOGV("In GetFeatureSetCommand::handleResponse");
 
         if (reply.get_cmd() != NL80211_CMD_VENDOR) {
             ALOGD("Ignoring reply with cmd = %d", reply.get_cmd());
@@ -632,7 +632,7 @@ protected:
         nlattr *vendor_data = reply.get_attribute(NL80211_ATTR_VENDOR_DATA);
         int len = reply.get_vendor_data_len();
 
-        ALOGD("Id = %0x, subcmd = %d, len = %d", id, subcmd, len);
+        ALOGV("Id = %0x, subcmd = %d, len = %d", id, subcmd, len);
         if (vendor_data == NULL || len == 0) {
             ALOGE("no vendor data in GetFeatureSetCommand response; ignoring it");
             return NL_SKIP;
@@ -656,7 +656,7 @@ protected:
             for (nl_iterator it(vendor_data); it.has_next(); it.next()) {
                 if (it.get_type() == ANDR_WIFI_ATTRIBUTE_NUM_FEATURE_SET) {
                     num_features_set = it.get_u32();
-                    ALOGI("Got feature list with %d concurrent sets", num_features_set);
+                    ALOGV("Got feature list with %d concurrent sets", num_features_set);
                     if(set_size_max && (num_features_set > set_size_max))
                         num_features_set = set_size_max;
                     *fm_size = num_features_set;
