@@ -798,11 +798,6 @@ wifi_error wifi_set_nodfs_flag(wifi_interface_handle handle, u32 nodfs)
     return (wifi_error) command.requestResponse();
 }
 
-wifi_error wifi_start_logging(wifi_interface_handle iface, u32 verbose_level, u32 flags,
-        u32 max_interval_sec, u32 min_data_size, char *buffer_name) {
-            return WIFI_ERROR_NOT_SUPPORTED;
-}
-
 wifi_error wifi_set_country_code(wifi_interface_handle handle, const char *country_code)
 {
     SetCountryCodeCommand command(handle, country_code);
