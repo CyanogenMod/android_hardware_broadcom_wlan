@@ -132,7 +132,14 @@ wifi_error init_wifi_vendor_hal_func_table(wifi_hal_fn *fn)
     fn->wifi_start_logging = wifi_start_logging;
     fn->wifi_set_epno_list = wifi_set_epno_list;
     fn->wifi_set_country_code = wifi_set_country_code;
-
+    fn->wifi_get_firmware_memory_dump = wifi_get_firmware_memory_dump;
+    fn->wifi_set_log_handler = wifi_set_log_handler;
+    fn->wifi_set_alert_handler = wifi_set_alert_handler;
+    fn->wifi_get_firmware_version = wifi_get_firmware_version;
+    fn->wifi_get_ring_buffers_status = wifi_get_ring_buffers_status;
+    fn->wifi_get_logger_supported_feature_set = wifi_get_logger_supported_feature_set;
+    fn->wifi_get_ring_data = wifi_get_ring_data;
+    fn->wifi_get_driver_version = wifi_get_driver_version;
     return WIFI_SUCCESS;
 }
 
