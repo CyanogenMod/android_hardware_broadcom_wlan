@@ -421,7 +421,7 @@ public:
         if(*mHandler.on_full_scan_result)
             (*mHandler.on_full_scan_result)(id(), result);
 
-        ALOGI("Full scan result: %-32s %02x:%02x:%02x:%02x:%02x:%02x %d %d %lld %lld %lld\n",
+        ALOGV("Full scan result: %-32s %02x:%02x:%02x:%02x:%02x:%02x %d %d %lld %lld %lld\n",
             result->ssid, result->bssid[0], result->bssid[1], result->bssid[2], result->bssid[3],
             result->bssid[4], result->bssid[5], result->rssi, result->channel, result->ts,
             result->rtt, result->rtt_sd);
