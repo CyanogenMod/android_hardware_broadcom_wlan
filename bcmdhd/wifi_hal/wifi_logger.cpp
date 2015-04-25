@@ -618,12 +618,14 @@ public:
                     ALOGE("Failed to put get memory dump request; result = %d", result);
                     return result;
                 }
+                /* BUG: 1. should not be passing pointer to data, 2. should not assume pointer is 32 bits
                 result = request.put_u32(LOGGER_ATTRIBUTE_FW_DUMP_DATA,
                         (uint32_t)(mBuff+buffer_size));
                 if (result != WIFI_SUCCESS) {
                     ALOGE("Failed to put get memory dump request; result = %d", result);
                     return result;
                 }
+                */
                 request.attr_end(data);
                 mBuffSize += buffer_size;
 
