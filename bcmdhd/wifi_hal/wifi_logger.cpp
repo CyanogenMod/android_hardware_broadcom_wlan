@@ -76,10 +76,10 @@ typedef enum {
 ///////////////////////////////////////////////////////////////////////////////
 class DebugCommand : public WifiCommand
 {
-    char **mBuff;
+    char *mBuff;
     int *mBuffSize;
     u32 *mNumRings;
-    wifi_ring_buffer_status **mStatus;
+    wifi_ring_buffer_status *mStatus;
     unsigned int *mSupport;
     u32 mVerboseLevel;
     u32 mFlags;
@@ -91,11 +91,11 @@ class DebugCommand : public WifiCommand
 public:
 
     // constructor for get version
-    DebugCommand(wifi_interface_handle iface, char **buffer, int *buffer_size,
+    DebugCommand(wifi_interface_handle iface, char *buffer, int *buffer_size,
             GetCmdType cmdType)
         : WifiCommand(iface, 0), mBuff(buffer), mBuffSize(buffer_size), mType(cmdType)
     {
-        memset(*mBuff, 0, *mBuffSize);
+        memset(mBuff, 0, *mBuffSize);
     }
 
     // constructor for ring data
@@ -105,10 +105,10 @@ public:
 
     // constructor for ring status
     DebugCommand(wifi_interface_handle iface, u32 *num_rings,
-            wifi_ring_buffer_status **status, GetCmdType cmdType)
+            wifi_ring_buffer_status *status, GetCmdType cmdType)
         : WifiCommand(iface, 0), mNumRings(num_rings), mStatus(status), mType(cmdType)
     {
-        memset(*mStatus, 0, sizeof(wifi_ring_buffer_status) * (*mNumRings));
+        memset(mStatus, 0, sizeof(wifi_ring_buffer_status) * (*mNumRings));
     }
 
     // constructor for feature set
@@ -179,7 +179,7 @@ public:
 
                 // Driver expecting only attribute type, passing mbuff as data with
                 // length 0 to avoid undefined state
-                result = request.put(LOGGER_ATTRIBUTE_FW_VER, *mBuff, 0);
+                result = request.put(LOGGER_ATTRIBUTE_FW_VER, mBuff, 0);
                 if (result != WIFI_SUCCESS) {
                     ALOGE("Failed to put get fw version request; result = %d", result);
                     return result;
@@ -200,7 +200,7 @@ public:
 
                 // Driver expecting only attribute type, passing mbuff as data with
                 // length 0 to avoid undefined state
-                result = request.put(LOGGER_ATTRIBUTE_DRIVER_VER, *mBuff, 0);
+                result = request.put(LOGGER_ATTRIBUTE_DRIVER_VER, mBuff, 0);
 
                 if (result != WIFI_SUCCESS) {
                     ALOGE("Failed to put get drv version request; result = %d", result);
@@ -291,7 +291,7 @@ public:
                 int len = reply.get_vendor_data_len();
 
                 ALOGD("len = %d, expected len = %d", len, *mBuffSize);
-                memcpy(*mBuff, data, min(len, *mBuffSize));
+                memcpy(mBuff, data, min(len, *mBuffSize));
                 if (*mBuffSize < len)
                     return NL_SKIP;
                 *mBuffSize = len;
@@ -306,7 +306,7 @@ public:
             {
                 nlattr *vendor_data = reply.get_attribute(NL80211_ATTR_VENDOR_DATA);
                 int len = reply.get_vendor_data_len();
-                wifi_ring_buffer_status *status(*mStatus);
+                wifi_ring_buffer_status *status(mStatus);
 
                 if (vendor_data == NULL || len == 0) {
                     ALOGE("No Debug data found");
@@ -365,11 +365,11 @@ public:
 };
 
 /* API to collect a firmware version string */
-wifi_error wifi_get_firmware_version( wifi_interface_handle iface, char **buffer,
-        int *buffer_size)
+wifi_error wifi_get_firmware_version(wifi_interface_handle iface, char *buffer,
+        int buffer_size)
 {
-    if (buffer && *buffer && buffer_size) {
-        DebugCommand *cmd = new DebugCommand(iface, buffer, buffer_size, GET_FW_VER);
+    if (buffer && (buffer_size > 0)) {
+        DebugCommand *cmd = new DebugCommand(iface, buffer, &buffer_size, GET_FW_VER);
         return (wifi_error)cmd->start();
     } else {
         ALOGE("FW version buffer NULL");
@@ -378,10 +378,10 @@ wifi_error wifi_get_firmware_version( wifi_interface_handle iface, char **buffer
 }
 
 /* API to collect a driver version string */
-wifi_error wifi_get_driver_version(wifi_interface_handle iface, char **buffer, int *buffer_size)
+wifi_error wifi_get_driver_version(wifi_interface_handle iface, char *buffer, int buffer_size)
 {
-    if (buffer && *buffer && buffer_size) {
-        DebugCommand *cmd = new DebugCommand(iface, buffer, buffer_size, GET_DRV_VER);
+    if (buffer && (buffer_size > 0)) {
+        DebugCommand *cmd = new DebugCommand(iface, buffer, &buffer_size, GET_DRV_VER);
         return (wifi_error)cmd->start();
     } else {
         ALOGE("Driver version buffer NULL");
@@ -398,9 +398,9 @@ wifi_error wifi_get_ring_data(wifi_interface_handle iface, char *ring_name)
 
 /* API to get the status of all ring buffers supported by driver */
 wifi_error wifi_get_ring_buffers_status(wifi_interface_handle iface,
-        u32 *num_rings, wifi_ring_buffer_status **status)
+        u32 *num_rings, wifi_ring_buffer_status *status)
 {
-    if (status && *status && num_rings) {
+    if (status && num_rings) {
         DebugCommand *cmd = new DebugCommand(iface, num_rings, status, GET_RING_STATUS);
         return (wifi_error)cmd->start();
     } else {
