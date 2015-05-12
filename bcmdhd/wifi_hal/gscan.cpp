@@ -1683,7 +1683,7 @@ public:
             return result;
         }
 
-        nlattr *data = request.attr_start(NL80211_ATTR_VENDOR_DATA);
+    nlattr *data = request.attr_start(NL80211_ATTR_VENDOR_DATA);
 
     result = request.put_u32(GSCAN_ATTRIBUTE_A_BAND_BOOST_THRESHOLD, mParams->A_band_boost_threshold);
     if (result < 0) {
@@ -1773,16 +1773,15 @@ public:
 
         nlattr *data = request.attr_start(NL80211_ATTR_VENDOR_DATA);
 
-    result = request.put_u32(GSCAN_ATTRIBUTE_LAZY_ROAM_ENABLE, mEnable);
-    if (result < 0) {
-        return result;
-    }
+        result = request.put_u32(GSCAN_ATTRIBUTE_LAZY_ROAM_ENABLE, mEnable);
+        if (result < 0) {
+            return result;
+        }
         request.attr_end(data);
         return result;
     }
 
     int start() {
-        ALOGI("Enabling Lazy roam");
         WifiRequest request(familyId(), ifaceId());
         int result = createRequest(request);
         if (result < 0) {
