@@ -618,8 +618,9 @@ public:
                     ALOGE("Failed to put get memory dump request; result = %d", result);
                     return result;
                 }
-                result = request.put_u32(LOGGER_ATTRIBUTE_FW_DUMP_DATA,
-                        (uint32_t)(mBuff+buffer_size));
+
+                result = request.put_u64(LOGGER_ATTRIBUTE_FW_DUMP_DATA,
+                         (uint64_t)(mBuff+buffer_size));
                 if (result != WIFI_SUCCESS) {
                     ALOGE("Failed to put get memory dump request; result = %d", result);
                     return result;
@@ -724,7 +725,8 @@ public:
                     ALOGE("Failed to put get memory dump request; result = %d", result);
                     return result;
                 }
-                result = request.put_u32(LOGGER_ATTRIBUTE_FW_DUMP_DATA, (uint32_t)mBuff);
+
+                result = request.put_u64(LOGGER_ATTRIBUTE_FW_DUMP_DATA, (uint64_t)mBuff);
                 if (result != WIFI_SUCCESS) {
                     ALOGE("Failed to put get memory dump request; result = %d", result);
                     return result;
