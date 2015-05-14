@@ -119,6 +119,14 @@ typedef enum {
     GSCAN_ATTRIBUTE_BSSID_BLACKLIST_FLUSH = 100,
     GSCAN_ATTRIBUTE_BLACKLIST_BSSID,
 
+    /* ANQPO */
+    GSCAN_ATTRIBUTE_ANQPO_HS_LIST = 110,
+    GSCAN_ATTRIBUTE_ANQPO_HS_LIST_SIZE,
+    GSCAN_ATTRIBUTE_ANQPO_HS_NETWORK_ID,
+    GSCAN_ATTRIBUTE_ANQPO_HS_NAI_REALM,
+    GSCAN_ATTRIBUTE_ANQPO_HS_ROAM_CONSORTIUM_ID,
+    GSCAN_ATTRIBUTE_ANQPO_HS_PLMN,
+
     GSCAN_ATTRIBUTE_MAX
 
 } GSCAN_ATTRIBUTE;
@@ -1981,3 +1989,171 @@ wifi_error wifi_set_bssid_preference(wifi_request_id id, wifi_interface_handle i
     return (wifi_error)cmd->start();
 }
 
+////////////////////////////////////////////////////////////////////////////////
+
+class AnqpoConfigureCommand : public WifiCommand
+{
+    int num_hs;
+    wifi_passpoint_network *mNetworks;
+    wifi_passpoint_event_handler mHandler;
+public:
+    AnqpoConfigureCommand(wifi_request_id id, wifi_interface_handle iface,
+        int num, wifi_passpoint_network *hs_list, wifi_passpoint_event_handler handler)
+        : WifiCommand(iface, id), num_hs(num), mNetworks(hs_list), mHandler(handler)
+    {
+    }
+
+    int createRequest(WifiRequest& request, int val) {
+
+        int result = request.create(GOOGLE_OUI, GSCAN_SUBCMD_ANQPO_CONFIG);
+        result = request.put_u32(GSCAN_ATTRIBUTE_ANQPO_HS_LIST_SIZE, num_hs);
+        if (result < 0) {
+            return result;
+        }
+
+        nlattr *data = request.attr_start(NL80211_ATTR_VENDOR_DATA);
+
+        struct nlattr * attr = request.attr_start(GSCAN_ATTRIBUTE_ANQPO_HS_LIST);
+        for (int i = 0; i < num_hs; i++) {
+            nlattr *attr2 = request.attr_start(i);
+            if (attr2 == NULL) {
+                return WIFI_ERROR_OUT_OF_MEMORY;
+            }
+            result = request.put_u32(GSCAN_ATTRIBUTE_ANQPO_HS_NETWORK_ID, mNetworks[i].id);
+            if (result < 0) {
+                return result;
+            }
+            result = request.put(GSCAN_ATTRIBUTE_ANQPO_HS_NAI_REALM, mNetworks[i].realm, 256);
+            if (result < 0) {
+                return result;
+            }
+            result = request.put(GSCAN_ATTRIBUTE_ANQPO_HS_ROAM_CONSORTIUM_ID,
+                         mNetworks[i].roamingConsortiumIds, 128);
+            if (result < 0) {
+                return result;
+            }
+            result = request.put(GSCAN_ATTRIBUTE_ANQPO_HS_PLMN, mNetworks[i].plmn, 3);
+            if (result < 0) {
+                return result;
+            }
+
+            request.attr_end(attr2);
+        }
+
+        request.attr_end(attr);
+        request.attr_end(data);
+
+        return WIFI_SUCCESS;
+    }
+
+    int start() {
+
+        WifiRequest request(familyId(), ifaceId());
+        int result = createRequest(request, num_hs);
+        if (result != WIFI_SUCCESS) {
+            ALOGE("failed to create request; result = %d", result);
+            return result;
+        }
+
+        registerVendorHandler(GOOGLE_OUI, GSCAN_EVENT_ANQPO_HOTSPOT_MATCH);
+
+        result = requestResponse(request);
+        if (result != WIFI_SUCCESS) {
+            ALOGE("failed to set ANQPO networks; result = %d", result);
+            unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_ANQPO_HOTSPOT_MATCH);
+            return result;
+        }
+
+        return result;
+    }
+
+    virtual int cancel() {
+
+        WifiRequest request(familyId(), ifaceId());
+        int result = createRequest(request, 0);
+        if (result != WIFI_SUCCESS) {
+            ALOGE("failed to create request; result = %d", result);
+        } else {
+            result = requestResponse(request);
+            if (result != WIFI_SUCCESS) {
+                ALOGE("failed to reset ANQPO networks;result = %d", result);
+            }
+        }
+
+        unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_ANQPO_HOTSPOT_MATCH);
+        return WIFI_SUCCESS;
+    }
+
+    virtual int handleResponse(WifiEvent& reply) {
+         ALOGD("Request complete!");
+        /* Nothing to do on response! */
+        return NL_SKIP;
+    }
+
+    virtual int handleEvent(WifiEvent& event) {
+        typedef struct {
+            u16 channel;        /* channel of GAS protocol */
+            u8  dialog_token;   /* GAS dialog token */
+            u8  fragment_id;    /* fragment id */
+            u16 status_code;    /* status code on GAS completion */
+            u16 data_len;       /* length of data to follow */
+            u8  data[1];        /* variable length specified by data_len */
+        } wifi_anqp_gas_resp;
+
+        ALOGI("ANQPO hotspot matched event!");
+
+        nlattr *vendor_data = event.get_attribute(NL80211_ATTR_VENDOR_DATA);
+        unsigned int len = event.get_vendor_data_len();
+
+        if (vendor_data == NULL || len < sizeof(wifi_scan_result)) {
+            ALOGI("No scan results found");
+            return NL_SKIP;
+        }
+
+        wifi_scan_result *result = (wifi_scan_result *)event.get_vendor_data();
+        byte *anqp = (byte *)result + offsetof(wifi_scan_result, ie_data) + result->ie_length;
+        wifi_anqp_gas_resp *gas = (wifi_anqp_gas_resp *)anqp;
+        int anqp_len = offsetof(wifi_anqp_gas_resp, data) + gas->data_len;
+        int networkId = *(int *)((byte *)anqp + anqp_len);
+
+        ALOGI("%-32s\t", result->ssid);
+
+        ALOGI("%02x:%02x:%02x:%02x:%02x:%02x ", result->bssid[0], result->bssid[1],
+                result->bssid[2], result->bssid[3], result->bssid[4], result->bssid[5]);
+
+        ALOGI("%d\t", result->rssi);
+        ALOGI("%d\t", result->channel);
+        ALOGI("%lld\t", result->ts);
+        ALOGI("%lld\t", result->rtt);
+        ALOGI("%lld\n", result->rtt_sd);
+
+        if(*mHandler.on_passpoint_network_found)
+            (*mHandler.on_passpoint_network_found)(id(), networkId, result, anqp_len, anqp);
+
+        return NL_SKIP;
+    }
+};
+
+wifi_error wifi_set_passpoint_list(wifi_request_id id, wifi_interface_handle iface, int num,
+        wifi_passpoint_network *networks, wifi_passpoint_event_handler handler)
+{
+    wifi_handle handle = getWifiHandle(iface);
+
+    AnqpoConfigureCommand *cmd = new AnqpoConfigureCommand(id, iface, num, networks, handler);
+    wifi_register_cmd(handle, id, cmd);
+    return (wifi_error)cmd->start();
+}
+
+wifi_error wifi_reset_passpoint_list(wifi_request_id id, wifi_interface_handle iface)
+{
+    wifi_handle handle = getWifiHandle(iface);
+
+    WifiCommand *cmd = wifi_unregister_cmd(handle, id);
+    if (cmd) {
+        cmd->cancel();
+        cmd->releaseRef();
+        return WIFI_SUCCESS;
+    }
+
+    return WIFI_ERROR_INVALID_ARGS;
+}
