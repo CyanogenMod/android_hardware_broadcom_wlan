@@ -1565,22 +1565,19 @@ wifi_error wifi_reset_epno_list(wifi_request_id id, wifi_interface_handle iface)
         cmd->releaseRef();
         return WIFI_SUCCESS;
     }
-
     return WIFI_ERROR_INVALID_ARGS;
 }
 
 wifi_error wifi_set_epno_list(wifi_request_id id, wifi_interface_handle iface,
         int num_networks, wifi_epno_network *networks, wifi_epno_handler handler)
 {
-
-     if (num_networks == 0 || networks == NULL) {
-         return wifi_reset_epno_list(id, iface);
-     }
-
      wifi_handle handle = getWifiHandle(iface);
 
      ePNOCommand *cmd = new ePNOCommand(iface, id, num_networks, networks, handler);
      wifi_register_cmd(handle, id, cmd);
+     if (num_networks == 0 || networks == NULL) {
+         return wifi_reset_epno_list(id, iface);
+     }
      return (wifi_error)cmd->start();
 }
 
@@ -1686,7 +1683,7 @@ public:
             return result;
         }
 
-        nlattr *data = request.attr_start(NL80211_ATTR_VENDOR_DATA);
+    nlattr *data = request.attr_start(NL80211_ATTR_VENDOR_DATA);
 
     result = request.put_u32(GSCAN_ATTRIBUTE_A_BAND_BOOST_THRESHOLD, mParams->A_band_boost_threshold);
     if (result < 0) {
@@ -1776,16 +1773,15 @@ public:
 
         nlattr *data = request.attr_start(NL80211_ATTR_VENDOR_DATA);
 
-    result = request.put_u32(GSCAN_ATTRIBUTE_LAZY_ROAM_ENABLE, mEnable);
-    if (result < 0) {
-        return result;
-    }
+        result = request.put_u32(GSCAN_ATTRIBUTE_LAZY_ROAM_ENABLE, mEnable);
+        if (result < 0) {
+            return result;
+        }
         request.attr_end(data);
         return result;
     }
 
     int start() {
-        ALOGI("Enabling Lazy roam");
         WifiRequest request(familyId(), ifaceId());
         int result = createRequest(request);
         if (result < 0) {
