@@ -145,6 +145,7 @@ typedef struct {
     struct nl_sock *cmd_sock;                       // command socket object
     struct nl_sock *event_sock;                     // event socket object
     int nl80211_family_id;                          // family id for 80211 driver
+    int cleanup_socks[2];                           // sockets used to implement wifi_cleanup
 
     bool in_event_loop;                             // Indicates that event loop is active
     bool clean_up;                                  // Indication to clean up the socket
