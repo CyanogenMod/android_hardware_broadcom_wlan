@@ -127,6 +127,10 @@ typedef enum {
     GSCAN_ATTRIBUTE_ANQPO_HS_ROAM_CONSORTIUM_ID,
     GSCAN_ATTRIBUTE_ANQPO_HS_PLMN,
 
+    /* Adaptive scan attributes */
+    GSCAN_ATTRIBUTE_BUCKET_STEP_COUNT = 120,
+    GSCAN_ATTRIBUTE_BUCKET_MAX_PERIOD,
+
     GSCAN_ATTRIBUTE_MAX
 
 } GSCAN_ATTRIBUTE;
@@ -485,7 +489,16 @@ public:
             if (result < 0) {
                 return result;
             }
-
+            result = request.put_u32(GSCAN_ATTRIBUTE_BUCKET_STEP_COUNT,
+                    mParams->buckets[i].step_count);
+            if (result < 0) {
+                return result;
+            }
+            result = request.put_u32(GSCAN_ATTRIBUTE_BUCKET_MAX_PERIOD,
+                    mParams->buckets[i].max_period);
+            if (result < 0) {
+                return result;
+            }
             result = request.put_u32(GSCAN_ATTRIBUTE_REPORT_EVENTS,
                     mParams->buckets[i].report_events);
             if (result < 0) {
@@ -1301,6 +1314,8 @@ public:
         for (i = 0; i < num; i++) {
             if (res[i].flags == PNO_SSID_FOUND) {
                 memcpy(mResults[i].ssid, res[i].ssid, res[i].ssid_len);
+                memcpy(mResults[i].bssid, res[i].bssid, sizeof(mac_addr));
+
                 mResults[i].ssid[res[i].ssid_len] = '\0';
                 mResults[i].channel = res[i].channel;
                 mResults[i].rssi = res[i].rssi;
