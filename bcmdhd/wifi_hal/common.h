@@ -177,6 +177,7 @@ typedef struct wifi_pno_result {
     signed char rssi;
     u16 channel;
     u16 flags;
+    mac_addr  bssid;
 } wifi_pno_result_t;
 
 wifi_error wifi_register_handler(wifi_handle handle, int cmd, nl_recvmsg_msg_cb_t func, void *arg);
