@@ -345,7 +345,7 @@ void wifi_event_loop(wifi_handle handle)
             ALOGE("Remote side hung up");
             break;
         } else if (pfd[0].revents & POLLIN) {
-            ALOGI("Found some events!!!");
+            // ALOGI("Found some events!!!");
             internal_pollin_handler(handle);
         } else if (pfd[1].revents & POLLIN) {
             ALOGI("Got a signal to exit!!!");
@@ -369,7 +369,7 @@ static int internal_no_seq_check(struct nl_msg *msg, void *arg)
 
 static int internal_valid_message_handler(nl_msg *msg, void *arg)
 {
-    ALOGI("got an event");
+    // ALOGI("got an event");
 
     wifi_handle handle = (wifi_handle)arg;
     hal_info *info = getHalInfo(handle);
