@@ -162,6 +162,11 @@ wifi_error wifi_initialize(wifi_handle *handle)
     memset(info, 0, sizeof(*info));
 
     ALOGI("Creating socket");
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, info->cleanup_socks) == -1) {
+        ALOGE("Could not create cleanup sockets");
+        return WIFI_ERROR_UNKNOWN;
+    }
+
     struct nl_sock *cmd_sock = wifi_create_nl_socket(WIFI_HAL_CMD_SOCK_PORT);
     if (cmd_sock == NULL) {
         ALOGE("Could not create handle");
@@ -250,6 +255,8 @@ static void internal_cleaned_up_handler(wifi_handle handle)
     wifi_cleaned_up_handler cleaned_up_handler = info->cleaned_up_handler;
 
     if (info->cmd_sock != 0) {
+        close(info->cleanup_socks[0]);
+        close(info->cleanup_socks[1]);
         nl_socket_free(info->cmd_sock);
         nl_socket_free(info->event_sock);
         info->cmd_sock = NULL;
@@ -269,7 +276,25 @@ void wifi_cleanup(wifi_handle handle, wifi_cleaned_up_handler handler)
     info->cleaned_up_handler = handler;
     info->clean_up = true;
 
-    ALOGI("Wifi cleanup completed");
+    pthread_mutex_lock(&info->cb_lock);
+
+    for (int i = 0; i < info->num_event_cb; i++) {
+        cb_info *cbi = &(info->event_cb[i]);
+        WifiCommand *cmd = (WifiCommand *)cbi->cb_arg;
+        if (cmd != NULL) {
+            cmd->addRef();
+            cmd->cancel();
+            cmd->releaseRef();
+        }
+    }
+
+    pthread_mutex_unlock(&info->cb_lock);
+
+    if (write(info->cleanup_socks[0], "T", 1) < 1) {
+        ALOGE("could not write to cleanup socket");
+    } else {
+        ALOGI("Wifi cleanup completed");
+    }
 }
 
 static int internal_pollin_handler(wifi_handle handle)
@@ -292,37 +317,43 @@ void wifi_event_loop(wifi_handle handle)
         info->in_event_loop = true;
     }
 
-    pollfd pfd;
-    memset(&pfd, 0, sizeof(pfd));
+    pollfd pfd[2];
+    memset(&pfd[0], 0, sizeof(pollfd) * 2);
 
-    pfd.fd = nl_socket_get_fd(info->event_sock);
-    pfd.events = POLLIN;
+    pfd[0].fd = nl_socket_get_fd(info->event_sock);
+    pfd[0].events = POLLIN;
+    pfd[1].fd = info->cleanup_socks[1];
+    pfd[1].events = POLLIN;
 
+    char buf[2048];
     /* TODO: Add support for timeouts */
 
     do {
         int timeout = -1;                   /* Infinite timeout */
-        pfd.revents = 0;
+        pfd[0].revents = 0;
+        pfd[1].revents = 0;
         // ALOGI("Polling socket");
-        int result = poll(&pfd, 1, -1);
+        int result = poll(pfd, 2, timeout);
         if (result < 0) {
             ALOGE("Error polling socket");
-        } else if (pfd.revents & POLLERR) {
+        } else if (pfd[0].revents & POLLERR) {
             ALOGE("POLL Error; error no = %d", errno);
-            char buf[2048];
-            int result2 = read(pfd.fd, buf, sizeof(buf));
+            int result2 = read(pfd[0].fd, buf, sizeof(buf));
             ALOGE("Read after POLL returned %d, error no = %d", result2, errno);
-        } else if (pfd.revents & POLLHUP) {
+        } else if (pfd[0].revents & POLLHUP) {
             ALOGE("Remote side hung up");
             break;
-        } else if (pfd.revents & POLLIN) {
-            // ALOGI("Found some events!!!");
+        } else if (pfd[0].revents & POLLIN) {
+            ALOGI("Found some events!!!");
             internal_pollin_handler(handle);
+        } else if (pfd[1].revents & POLLIN) {
+            ALOGI("Got a signal to exit!!!");
+            int result2 = read(pfd[1].fd, buf, sizeof(buf));
+            ALOGE("Read after POLL returned %d, error no = %d", result2, errno);
         } else {
-            ALOGE("Unknown event - %0x", pfd.revents);
+            ALOGE("Unknown event - %0x, %0x", pfd[0].revents, pfd[1].revents);
         }
     } while (!info->clean_up);
-
 
     ALOGI("Cleaning up");
     internal_cleaned_up_handler(handle);
@@ -337,6 +368,8 @@ static int internal_no_seq_check(struct nl_msg *msg, void *arg)
 
 static int internal_valid_message_handler(nl_msg *msg, void *arg)
 {
+    ALOGI("got an event");
+
     wifi_handle handle = (wifi_handle)arg;
     hal_info *info = getHalInfo(handle);
 
