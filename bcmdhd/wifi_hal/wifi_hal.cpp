@@ -282,7 +282,9 @@ void wifi_cleanup(wifi_handle handle, wifi_cleaned_up_handler handler)
         WifiCommand *cmd = (WifiCommand *)cbi->cb_arg;
         if (cmd != NULL) {
             cmd->addRef();
+            pthread_mutex_unlock(&info->cb_lock);
             cmd->cancel();
+            pthread_mutex_lock(&info->cb_lock);
             cmd->releaseRef();
         }
     }
