@@ -337,7 +337,7 @@ void wifi_event_loop(wifi_handle handle)
         // ALOGI("Polling socket");
         int result = poll(pfd, 2, timeout);
         if (result < 0) {
-            ALOGE("Error polling socket");
+            // ALOGE("Error polling socket");
         } else if (pfd[0].revents & POLLERR) {
             ALOGE("POLL Error; error no = %d", errno);
             int result2 = read(pfd[0].fd, buf, sizeof(buf));
