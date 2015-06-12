@@ -767,15 +767,7 @@ wifi_error wifi_stop_gscan(wifi_request_id id, wifi_interface_handle iface)
         return WIFI_SUCCESS;
     }
 
-
-    WifiCommand *cmd = wifi_unregister_cmd(handle, id);
-    if (cmd) {
-        cmd->cancel();
-        cmd->releaseRef();
-        return WIFI_SUCCESS;
-    }
-
-    return WIFI_ERROR_INVALID_ARGS;
+    return wifi_cancel_cmd(id, iface);
 }
 
 
@@ -812,14 +804,7 @@ wifi_error wifi_disable_full_scan_results(wifi_request_id id, wifi_interface_han
         return WIFI_SUCCESS;
     }
 
-    WifiCommand *cmd = wifi_unregister_cmd(handle, id);
-    if (cmd) {
-        cmd->cancel();
-        cmd->releaseRef();
-        return WIFI_SUCCESS;
-    }
-
-    return WIFI_ERROR_INVALID_ARGS;
+    return wifi_cancel_cmd(id, iface);
 }
 
 
@@ -1340,16 +1325,7 @@ wifi_error wifi_set_bssid_hotlist(wifi_request_id id, wifi_interface_handle ifac
 
 wifi_error wifi_reset_bssid_hotlist(wifi_request_id id, wifi_interface_handle iface)
 {
-    wifi_handle handle = getWifiHandle(iface);
-
-    WifiCommand *cmd = wifi_unregister_cmd(handle, id);
-    if (cmd) {
-        cmd->cancel();
-        cmd->releaseRef();
-        return WIFI_SUCCESS;
-    }
-
-    return WIFI_ERROR_INVALID_ARGS;
+    return wifi_cancel_cmd(id, iface);
 }
 
 
@@ -1559,29 +1535,12 @@ wifi_error wifi_set_significant_change_handler(wifi_request_id id, wifi_interfac
 
 wifi_error wifi_reset_significant_change_handler(wifi_request_id id, wifi_interface_handle iface)
 {
-    wifi_handle handle = getWifiHandle(iface);
-
-    WifiCommand *cmd = wifi_unregister_cmd(handle, id);
-    if (cmd) {
-        cmd->cancel();
-        cmd->releaseRef();
-        return WIFI_SUCCESS;
-    }
-
-    return WIFI_ERROR_INVALID_ARGS;
+    return wifi_cancel_cmd(id, iface);
 }
 
 wifi_error wifi_reset_epno_list(wifi_request_id id, wifi_interface_handle iface)
 {
-    wifi_handle handle = getWifiHandle(iface);
-
-    WifiCommand *cmd = wifi_unregister_cmd(handle, id);
-    if (cmd) {
-        cmd->cancel();
-        cmd->releaseRef();
-        return WIFI_SUCCESS;
-    }
-    return WIFI_ERROR_INVALID_ARGS;
+    return wifi_cancel_cmd(id, iface);
 }
 
 wifi_error wifi_set_epno_list(wifi_request_id id, wifi_interface_handle iface,
@@ -2158,14 +2117,6 @@ wifi_error wifi_set_passpoint_list(wifi_request_id id, wifi_interface_handle ifa
 
 wifi_error wifi_reset_passpoint_list(wifi_request_id id, wifi_interface_handle iface)
 {
-    wifi_handle handle = getWifiHandle(iface);
-
-    WifiCommand *cmd = wifi_unregister_cmd(handle, id);
-    if (cmd) {
-        cmd->cancel();
-        cmd->releaseRef();
-        return WIFI_SUCCESS;
-    }
-
-    return WIFI_ERROR_INVALID_ARGS;
+    return wifi_cancel_cmd(id, iface);
 }
+
