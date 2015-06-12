@@ -452,6 +452,14 @@ public:
         return WIFI_SUCCESS;
     }
 
+    virtual int cancel() {
+        /* TODO: send a command to driver to stop generating logging events */
+
+        /* unregister event handler */
+        unregisterVendorHandler(GOOGLE_OUI, GOOGLE_DEBUG_RING_EVENT);
+        return WIFI_SUCCESS;
+    }
+
     virtual int handleEvent(WifiEvent& event) {
         char *buffer = NULL;
         int buffer_size = 0;
