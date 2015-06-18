@@ -36,6 +36,7 @@ typedef enum {
     LOGGER_GET_RING_STATUS,
     LOGGER_GET_RING_DATA,
     LOGGER_GET_FEATURE,
+    LOGGER_RESET_LOGGING,
 } DEBUG_SUB_COMMAND;
 
 typedef enum {
@@ -445,6 +446,9 @@ public:
     SetLogHandler(wifi_interface_handle iface, int id, wifi_ring_buffer_data_handler handler)
         : WifiCommand(iface, id), mHandler(handler)
     { }
+    SetLogHandler(wifi_interface_handle iface, int id)
+        : WifiCommand(iface, id)
+    { }
 
     int start() {
         ALOGD("Register log handler");
@@ -453,10 +457,26 @@ public:
     }
 
     virtual int cancel() {
-        /* TODO: send a command to driver to stop generating logging events */
+        /* Send a command to driver to stop generating logging events */
+        ALOGD("Reset event handler");
+
+        WifiRequest request(familyId(), ifaceId());
+        int result = request.create(GOOGLE_OUI, LOGGER_RESET_LOGGING);
+
+        if (result != WIFI_SUCCESS) {
+            ALOGE("failed to create reset request; result = %d", result);
+            return result;
+        }
+
+        result = requestResponse(request);
+        if (result != WIFI_SUCCESS) {
+            ALOGE("failed to request reset; result = %d", result);
+            return result;
+        }
 
         /* unregister event handler */
         unregisterVendorHandler(GOOGLE_OUI, GOOGLE_DEBUG_RING_EVENT);
+        ALOGD("Success to reset event handler");
         return WIFI_SUCCESS;
     }
 
@@ -518,6 +538,20 @@ wifi_error wifi_set_log_handler(wifi_request_id id, wifi_interface_handle iface,
         ALOGD("Out of memory");
         return WIFI_ERROR_OUT_OF_MEMORY;
     }
+}
+
+wifi_error wifi_reset_log_handler(wifi_request_id id, wifi_interface_handle iface)
+{
+    wifi_handle handle = getWifiHandle(iface);
+    SetLogHandler *cmd = new SetLogHandler(iface, id);
+
+    ALOGI("Logger reset, handle = %p", handle);
+    if (cmd) {
+        cmd->cancel();
+        cmd->releaseRef();
+        return WIFI_SUCCESS;
+    }
+    return WIFI_ERROR_INVALID_ARGS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
