@@ -157,6 +157,8 @@ wifi_error init_wifi_vendor_hal_func_table(wifi_hal_fn *fn)
     fn->wifi_enable_lazy_roam = wifi_enable_lazy_roam;
     fn->wifi_start_rssi_monitoring = wifi_start_rssi_monitoring;
     fn->wifi_stop_rssi_monitoring = wifi_stop_rssi_monitoring;
+    fn->wifi_start_sending_offloaded_packet = wifi_start_sending_offloaded_packet;
+    fn->wifi_stop_sending_offloaded_packet = wifi_stop_sending_offloaded_packet;
     return WIFI_SUCCESS;
 }
 
