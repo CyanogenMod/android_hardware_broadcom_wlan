@@ -143,6 +143,7 @@ wifi_error init_wifi_vendor_hal_func_table(wifi_hal_fn *fn)
     fn->wifi_set_country_code = wifi_set_country_code;
     fn->wifi_get_firmware_memory_dump = wifi_get_firmware_memory_dump;
     fn->wifi_set_log_handler = wifi_set_log_handler;
+    fn->wifi_reset_log_handler = wifi_reset_log_handler;
     fn->wifi_set_alert_handler = wifi_set_alert_handler;
     fn->wifi_get_firmware_version = wifi_get_firmware_version;
     fn->wifi_get_ring_buffers_status = wifi_get_ring_buffers_status;
