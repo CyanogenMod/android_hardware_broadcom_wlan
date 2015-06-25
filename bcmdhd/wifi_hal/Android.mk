@@ -32,7 +32,8 @@ LOCAL_SRC_FILES := \
 	cpp_bindings.cpp \
 	gscan.cpp \
 	link_layer_stats.cpp \
-	wifi_logger.cpp
+	wifi_logger.cpp \
+	wifi_offload.cpp
 
 LOCAL_MODULE := libwifi-hal-bcm
 

@@ -59,6 +59,10 @@ typedef enum {
     ANDROID_NL80211_SUBCMD_DEBUG_RANGE_START = 0x1400,
     ANDROID_NL80211_SUBCMD_DEBUG_RANGE_END   = 0x14FF,
 
+    /* define all wifi offload related commands between 0x1600 and 0x16FF */
+    ANDROID_NL80211_SUBCMD_WIFI_OFFLOAD_RANGE_START = 0x1600,
+    ANDROID_NL80211_SUBCMD_WIFI_OFFLOAD_RANGE_END   = 0x16FF,
+
     /* This is reserved for future usage */
 
 } ANDROID_VENDOR_SUB_COMMAND;
