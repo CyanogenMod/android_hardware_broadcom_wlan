@@ -1,11 +1,23 @@
+#include <stdint.h>
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <netlink/genl/genl.h>
+#include <netlink/genl/family.h>
+#include <netlink/genl/ctrl.h>
+#include <linux/rtnetlink.h>
+#include <netpacket/packet.h>
+#include <linux/filter.h>
+#include <linux/errqueue.h>
 
-#include <stdlib.h>
 #include <linux/pkt_sched.h>
 #include <netlink/object-api.h>
+#include <netlink/netlink.h>
+#include <netlink/socket.h>
 #include <netlink/handlers.h>
 
 #include "wifi_hal.h"
 #include "common.h"
+#include "cpp_bindings.h"
 
 interface_info *getIfaceInfo(wifi_interface_handle handle)
 {
@@ -208,3 +220,18 @@ void wifi_unregister_cmd(wifi_handle handle, WifiCommand *cmd)
         }
     }
 }
+
+wifi_error wifi_cancel_cmd(wifi_request_id id, wifi_interface_handle iface)
+{
+    wifi_handle handle = getWifiHandle(iface);
+
+    WifiCommand *cmd = wifi_unregister_cmd(handle, id);
+    if (cmd) {
+        cmd->cancel();
+        cmd->releaseRef();
+        return WIFI_SUCCESS;
+    }
+
+    return WIFI_ERROR_INVALID_ARGS;
+}
+

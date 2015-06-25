@@ -95,6 +95,7 @@ typedef enum {
     WIFI_SUBCMD_SET_BSSID_BLACKLIST,                     /* 0x1014 */
 
     GSCAN_SUBCMD_ANQPO_CONFIG,                          /* 0x1015 */
+    WIFI_SUBCMD_SET_RSSI_MONITOR,                       /* 0x1016 */
     /* Add more sub commands here */
 
     GSCAN_SUBCMD_MAX
@@ -114,7 +115,8 @@ typedef enum {
     GSCAN_EVENT_EPNO_EVENT,
     GOOGLE_DEBUG_RING_EVENT,
     GOOGLE_DEBUG_MEM_DUMP_EVENT,
-    GSCAN_EVENT_ANQPO_HOTSPOT_MATCH
+    GSCAN_EVENT_ANQPO_HOTSPOT_MATCH,
+    GOOGLE_RSSI_MONITOR_EVENT
 } WIFI_EVENT;
 
 typedef void (*wifi_internal_event_handler) (wifi_handle handle, int events);
@@ -199,7 +201,7 @@ hal_info *getHalInfo(wifi_handle handle);
 hal_info *getHalInfo(wifi_interface_handle handle);
 wifi_handle getWifiHandle(hal_info *info);
 wifi_interface_handle getIfaceHandle(interface_info *info);
-
+wifi_error wifi_cancel_cmd(wifi_request_id id, wifi_interface_handle iface);
 
 // some common macros
 
