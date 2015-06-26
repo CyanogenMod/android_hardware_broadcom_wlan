@@ -261,7 +261,7 @@ public:
     }
 
     int start() {
-        ALOGD("Start debug command");
+        // ALOGD("Start debug command");
         WifiRequest request(familyId(), ifaceId());
         int result = createRequest(request);
         if (result != WIFI_SUCCESS) {
@@ -484,11 +484,11 @@ public:
         char *buffer = NULL;
         int buffer_size = 0;
 
-        ALOGD("In SetLogHandler::handleEvent");
+        // ALOGD("In SetLogHandler::handleEvent");
         nlattr *vendor_data = event.get_attribute(NL80211_ATTR_VENDOR_DATA);
         int len = event.get_vendor_data_len();
         int event_id = event.get_vendor_subcmd();
-        ALOGI("Got Logger event: %d", event_id);
+        // ALOGI("Got Logger event: %d", event_id);
 
         if (vendor_data == NULL || len == 0) {
             ALOGE("No Debug data found");
@@ -511,7 +511,7 @@ public:
                 }
             }
 
-            ALOGI("Retrieved Debug data");
+            // ALOGI("Retrieved Debug data");
             if (mHandler.on_ring_buffer_data) {
                 (*mHandler.on_ring_buffer_data)((char *)status.name, buffer, buffer_size,
                         &status);
