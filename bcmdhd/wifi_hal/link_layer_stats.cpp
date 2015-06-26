@@ -68,9 +68,19 @@ protected:
 
         void *data = reply.get_vendor_data();
         int len = reply.get_vendor_data_len();
-	int num_chan = ((wifi_radio_stat *)data)->num_channels;
-        if (num_chan > 32) {
+	unsigned int num_chan = ((wifi_radio_stat *)data)->num_channels;
+        if (num_chan > 11) {
            ALOGE("Incorrect number of channels = %d", num_chan);
+           // dump data before num_channels
+           ALOGE("radio: = %d", ((wifi_radio_stat *)data)->radio);
+           ALOGE("on_time: = %d", ((wifi_radio_stat *)data)->on_time);
+           ALOGE("tx_time: = %d", ((wifi_radio_stat *)data)->tx_time);
+           ALOGE("rx_time: = %d", ((wifi_radio_stat *)data)->rx_time);
+           ALOGE("on_time_scan: = %d", ((wifi_radio_stat *)data)->on_time_scan);
+           ALOGE("on_time_nbd: = %d", ((wifi_radio_stat *)data)->on_time_nbd);
+           ALOGE("on_time_gscan: = %d", ((wifi_radio_stat *)data)->on_time_gscan);
+           ALOGE("on_time_pno_scan: = %d", ((wifi_radio_stat *)data)->on_time_pno_scan);
+           ALOGE("on_time_hs20: = %d", ((wifi_radio_stat *)data)->on_time_hs20);
            return NL_SKIP;
         }
 	(*mHandler.on_link_stats_results)(id,
