@@ -226,6 +226,7 @@ wifi_error wifi_cancel_cmd(wifi_request_id id, wifi_interface_handle iface)
     wifi_handle handle = getWifiHandle(iface);
 
     WifiCommand *cmd = wifi_unregister_cmd(handle, id);
+    ALOGV("Cancel WifiCommand = %p", cmd);
     if (cmd) {
         cmd->cancel();
         cmd->releaseRef();
