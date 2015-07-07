@@ -36,7 +36,7 @@ class GetLinkStatsCommand : public WifiCommand
     wifi_stats_result_handler mHandler;
 public:
     GetLinkStatsCommand(wifi_interface_handle iface, wifi_stats_result_handler handler)
-        : WifiCommand(iface, 0), mHandler(handler)
+        : WifiCommand("GetLinkStatsCommand", iface, 0), mHandler(handler)
     { }
 
     virtual int create() {

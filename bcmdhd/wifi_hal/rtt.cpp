@@ -115,7 +115,7 @@ class GetRttCapabilitiesCommand : public WifiCommand
     wifi_rtt_capabilities *mCapabilities;
 public:
     GetRttCapabilitiesCommand(wifi_interface_handle iface, wifi_rtt_capabilities *capabitlites)
-        : WifiCommand(iface, 0), mCapabilities(capabitlites)
+        : WifiCommand("GetRttCapabilitiesCommand", iface, 0), mCapabilities(capabitlites)
     {
         memset(mCapabilities, 0, sizeof(*mCapabilities));
     }
@@ -170,7 +170,7 @@ class RttCommand : public WifiCommand
 public:
     RttCommand(wifi_interface_handle iface, int id, unsigned num_rtt_config,
             wifi_rtt_config rtt_config[], wifi_rtt_event_handler handler)
-        : WifiCommand(iface, id), numRttParams(num_rtt_config), rttParams(rtt_config),
+        : WifiCommand("RttCommand", iface, id), numRttParams(num_rtt_config), rttParams(rtt_config),
         rttHandler(handler)
     {
         memset(rttResults, 0, sizeof(rttResults));
@@ -180,7 +180,7 @@ public:
     }
 
     RttCommand(wifi_interface_handle iface, int id)
-        : WifiCommand(iface, id)
+        : WifiCommand("RttCommand", iface, id)
     {
         currentIdx = 0;
         mCompleted = 0;
