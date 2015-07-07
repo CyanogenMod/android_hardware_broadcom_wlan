@@ -150,7 +150,7 @@ class GetCapabilitiesCommand : public WifiCommand
     wifi_gscan_capabilities *mCapabilities;
 public:
     GetCapabilitiesCommand(wifi_interface_handle iface, wifi_gscan_capabilities *capabitlites)
-        : WifiCommand(iface, 0), mCapabilities(capabitlites)
+        : WifiCommand("GetGscanCapabilitiesCommand", iface, 0), mCapabilities(capabitlites)
     {
         memset(mCapabilities, 0, sizeof(*mCapabilities));
     }
@@ -208,8 +208,8 @@ class GetChannelListCommand : public WifiCommand
 public:
     GetChannelListCommand(wifi_interface_handle iface, wifi_channel *channel_buf, int *ch_num,
         int num_max_ch, int band)
-        : WifiCommand(iface, 0), channels(channel_buf), max_channels(num_max_ch), num_channels(ch_num),
-        band(band)
+        : WifiCommand("GetChannelListCommand", iface, 0), channels(channel_buf),
+            max_channels(num_max_ch), num_channels(ch_num), band(band)
     {
         memset(channels, 0, sizeof(wifi_channel) * max_channels);
     }
@@ -351,7 +351,7 @@ class FullScanResultsCommand : public WifiCommand
 public:
     FullScanResultsCommand(wifi_interface_handle iface, int id, int *params,
                 wifi_scan_result_handler handler)
-        : WifiCommand(iface, id), mParams(params), mHandler(handler)
+        : WifiCommand("FullScanResultsCommand", iface, id), mParams(params), mHandler(handler)
     { }
 
     int createRequest(WifiRequest& request, int subcmd, int enable) {
@@ -453,7 +453,7 @@ class ScanCommand : public WifiCommand
 public:
     ScanCommand(wifi_interface_handle iface, int id, wifi_scan_cmd_params *params,
                 wifi_scan_result_handler handler)
-        : WifiCommand(iface, id), mParams(params), mHandler(handler),
+        : WifiCommand("ScanCommand", iface, id), mParams(params), mHandler(handler),
           mLocalFullScanBuckets(0)
     { }
 
@@ -758,7 +758,7 @@ wifi_error wifi_stop_gscan(wifi_request_id id, wifi_interface_handle iface)
     wifi_handle handle = getWifiHandle(iface);
     ALOGV("Stopping GScan, wifi_request_id = %d, halHandle = %p", id, handle);
 
-    if(id == -1) {
+    if (id == -1) {
         wifi_scan_result_handler handler;
         wifi_scan_cmd_params dummy_params;
         wifi_handle handle = getWifiHandle(iface);
@@ -830,7 +830,7 @@ class GetScanResultsCommand : public WifiCommand {
 public:
     GetScanResultsCommand(wifi_interface_handle iface, byte flush,
             wifi_cached_scan_results *results, int max, int *num)
-        : WifiCommand(iface, -1), mScans(results), mMax(max), mNum(num),
+        : WifiCommand("GetScanResultsCommand", iface, -1), mScans(results), mMax(max), mNum(num),
                 mRetrieved(0), mFlush(flush), mCompleted(0), mNextScanResult(0)
     { }
 
@@ -996,7 +996,7 @@ private:
 public:
     BssidHotlistCommand(wifi_interface_handle handle, int id,
             wifi_bssid_hotlist_params params, wifi_hotlist_ap_found_handler handler)
-        : WifiCommand(handle, id), mParams(params), mHandler(handler)
+        : WifiCommand("BssidHotlistCommand", handle, id), mParams(params), mHandler(handler)
     { }
 
     int createSetupRequest(WifiRequest& request) {
@@ -1164,7 +1164,7 @@ private:
 public:
     ePNOCommand(wifi_interface_handle handle, int id,
             int num_networks, wifi_epno_network *networks, wifi_epno_handler handler)
-        : WifiCommand(handle, id), mHandler(handler)
+        : WifiCommand("ePNOCommand", handle, id), mHandler(handler)
     {
         ssid_list = networks;
         num_ssid = num_networks;
@@ -1359,7 +1359,8 @@ private:
 public:
     SignificantWifiChangeCommand(wifi_interface_handle handle, int id,
             wifi_significant_change_params params, wifi_significant_change_handler handler)
-        : WifiCommand(handle, id), mParams(params), mHandler(handler)
+        : WifiCommand("SignificantWifiChangeCommand", handle, id), mParams(params),
+            mHandler(handler)
     { }
 
     int createSetupRequest(WifiRequest& request) {
@@ -1582,7 +1583,7 @@ private:
 public:
     SSIDWhitelistCommand(wifi_interface_handle handle, int id,
             int num_networks, wifi_ssid *ssids)
-        : WifiCommand(handle, id), mNumNetworks(num_networks), mSSIDs(ssids)
+        : WifiCommand("SSIDWhitelistCommand", handle, id), mNumNetworks(num_networks), mSSIDs(ssids)
     { }
 
     int createRequest(WifiRequest& request) {
@@ -1671,7 +1672,7 @@ private:
     wifi_roam_params *mParams;
 public:
     RoamParamsCommand(wifi_interface_handle handle, int id, wifi_roam_params *params)
-        : WifiCommand(handle, id), mParams(params)
+        : WifiCommand("RoamParamsCommand", handle, id), mParams(params)
     { }
 
     int createRequest(WifiRequest& request) {
@@ -1763,7 +1764,7 @@ private:
     int mEnable;
 public:
     LazyRoamCommand(wifi_interface_handle handle, int id, int enable)
-        : WifiCommand(handle, id), mEnable(enable)
+        : WifiCommand("LazyRoamCommand", handle, id), mEnable(enable)
     { }
 
     int createRequest(WifiRequest& request) {
@@ -1829,7 +1830,7 @@ private:
 public:
     BssidBlacklistCommand(wifi_interface_handle handle, int id,
             wifi_bssid_params *params)
-        : WifiCommand(handle, id), mParams(params)
+        : WifiCommand("BssidBlacklistCommand", handle, id), mParams(params)
     { }
      int createRequest(WifiRequest& request) {
         int result = request.create(GOOGLE_OUI, WIFI_SUBCMD_SET_BSSID_BLACKLIST);
@@ -1908,7 +1909,7 @@ private:
 public:
     BssidPreferenceCommand(wifi_interface_handle handle, int id,
             int num_bssid, wifi_bssid_preference *prefs)
-        : WifiCommand(handle, id), mNumBssid(num_bssid), mPrefs(prefs)
+        : WifiCommand("BssidPreferenceCommand", handle, id), mNumBssid(num_bssid), mPrefs(prefs)
     { }
 
     int createRequest(WifiRequest& request) {
@@ -2008,7 +2009,8 @@ class AnqpoConfigureCommand : public WifiCommand
 public:
     AnqpoConfigureCommand(wifi_request_id id, wifi_interface_handle iface,
         int num, wifi_passpoint_network *hs_list, wifi_passpoint_event_handler handler)
-        : WifiCommand(iface, id), num_hs(num), mNetworks(hs_list), mHandler(handler)
+        : WifiCommand("AnqpoConfigureCommand", iface, id), num_hs(num), mNetworks(hs_list),
+            mHandler(handler)
     {
     }
 
