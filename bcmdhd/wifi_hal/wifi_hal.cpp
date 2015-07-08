@@ -292,16 +292,30 @@ void wifi_cleanup(wifi_handle handle, wifi_cleaned_up_handler handler)
 
     pthread_mutex_lock(&info->cb_lock);
 
-    for (int i = 0; i < info->num_event_cb; i++) {
-        cb_info *cbi = &(info->event_cb[i]);
-        WifiCommand *cmd = (WifiCommand *)cbi->cb_arg;
+    int bad_commands = 0;
+
+    while (info->num_cmd > bad_commands) {
+        int num_cmd = info->num_cmd;
+        cmd_info *cmdi = &(info->cmd[bad_commands]);
+        WifiCommand *cmd = cmdi->cmd;
         if (cmd != NULL) {
-            cmd->addRef();
+            ALOGE("Cancelling command %p:%s", cmd, cmd->getType());
             pthread_mutex_unlock(&info->cb_lock);
             cmd->cancel();
             pthread_mutex_lock(&info->cb_lock);
+            /* release reference added when command is saved */
             cmd->releaseRef();
+            if (num_cmd == info->num_cmd) {
+                ALOGE("Cancelling command %p:%s did not work", cmd, cmd->getType());
+                bad_commands++;
+            }
         }
+    }
+
+    for (int i = 0; i < info->num_event_cb; i++) {
+        cb_info *cbi = &(info->event_cb[i]);
+        WifiCommand *cmd = (WifiCommand *)cbi->cb_arg;
+        ALOGE("Leaked command %p:%s", cmd, cmd->getType());
     }
 
     pthread_mutex_unlock(&info->cb_lock);
@@ -459,7 +473,7 @@ private:
     int   mId;
 public:
     GetMulticastIdCommand(wifi_handle handle, const char *name, const char *group)
-        : WifiCommand(handle, 0)
+        : WifiCommand("GetMulticastIdCommand", handle, 0)
     {
         mName = name;
         mGroup = group;
@@ -534,7 +548,7 @@ private:
     int set_size_max;
 public:
     SetPnoMacAddrOuiCommand(wifi_interface_handle handle, oui scan_oui)
-        : WifiCommand(handle, 0)
+        : WifiCommand("SetPnoMacAddrOuiCommand", handle, 0)
     {
         mOui = scan_oui;
     }
@@ -586,7 +600,7 @@ private:
     u32 mNoDfs;
 public:
     SetNodfsCommand(wifi_interface_handle handle, u32 nodfs)
-        : WifiCommand(handle, 0) {
+        : WifiCommand("SetNodfsCommand", handle, 0) {
         mNoDfs = nodfs;
     }
     virtual int create() {
@@ -614,7 +628,7 @@ private:
     const char *mCountryCode;
 public:
     SetCountryCodeCommand(wifi_interface_handle handle, const char *country_code)
-        : WifiCommand(handle, 0) {
+        : WifiCommand("SetCountryCodeCommand", handle, 0) {
         mCountryCode = country_code;
         }
     virtual int create() {
@@ -646,7 +660,8 @@ private:
 public:
     SetRSSIMonitorCommand(wifi_request_id id, wifi_interface_handle handle,
                 s8 max_rssi, s8 min_rssi, wifi_rssi_event_handler eh)
-        : WifiCommand(handle, id), mMax_rssi(max_rssi), mMin_rssi(min_rssi), mHandler(eh)
+        : WifiCommand("SetRSSIMonitorCommand", handle, id), mMax_rssi(max_rssi), mMin_rssi
+        (min_rssi), mHandler(eh)
         {
         }
    int createRequest(WifiRequest& request, int enable) {
@@ -764,7 +779,7 @@ private:
 public:
     GetFeatureSetCommand(wifi_interface_handle handle, int feature, feature_set *set,
          feature_set set_matrix[], int *size, int max_size)
-        : WifiCommand(handle, 0)
+        : WifiCommand("GetFeatureSetCommand", handle, 0)
     {
         feature_type = feature;
         fset = set;
