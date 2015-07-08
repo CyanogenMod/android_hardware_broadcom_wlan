@@ -94,33 +94,34 @@ public:
     // constructor for get version
     DebugCommand(wifi_interface_handle iface, char *buffer, int *buffer_size,
             GetCmdType cmdType)
-        : WifiCommand(iface, 0), mBuff(buffer), mBuffSize(buffer_size), mType(cmdType)
+        : WifiCommand("DebugCommand", iface, 0), mBuff(buffer), mBuffSize(buffer_size), mType
+        (cmdType)
     {
         memset(mBuff, 0, *mBuffSize);
     }
 
     // constructor for ring data
     DebugCommand(wifi_interface_handle iface, char *ring_name, GetCmdType cmdType)
-        : WifiCommand(iface, 0), mRingName(ring_name), mType(cmdType)
+        : WifiCommand("DebugCommand", iface, 0), mRingName(ring_name), mType(cmdType)
     { }
 
     // constructor for ring status
     DebugCommand(wifi_interface_handle iface, u32 *num_rings,
             wifi_ring_buffer_status *status, GetCmdType cmdType)
-        : WifiCommand(iface, 0), mNumRings(num_rings), mStatus(status), mType(cmdType)
+        : WifiCommand("DebugCommand", iface, 0), mNumRings(num_rings), mStatus(status), mType(cmdType)
     {
         memset(mStatus, 0, sizeof(wifi_ring_buffer_status) * (*mNumRings));
     }
 
     // constructor for feature set
     DebugCommand(wifi_interface_handle iface, unsigned int *support, GetCmdType cmdType)
-        : WifiCommand(iface, 0), mSupport(support), mType(cmdType)
+        : WifiCommand("DebugCommand", iface, 0), mSupport(support), mType(cmdType)
     { }
 
     // constructor for ring params
     DebugCommand(wifi_interface_handle iface, u32 verbose_level, u32 flags,
             u32 max_interval_sec, u32 min_data_size, char *ring_name, GetCmdType cmdType)
-        : WifiCommand(iface, 0), mVerboseLevel(verbose_level), mFlags(flags),
+        : WifiCommand("DebugCommand", iface, 0), mVerboseLevel(verbose_level), mFlags(flags),
         mMaxIntervalSec(max_interval_sec), mMinDataSize(min_data_size),
         mRingName(ring_name), mType(cmdType)
     { }
@@ -444,10 +445,10 @@ class SetLogHandler : public WifiCommand
 
 public:
     SetLogHandler(wifi_interface_handle iface, int id, wifi_ring_buffer_data_handler handler)
-        : WifiCommand(iface, id), mHandler(handler)
+        : WifiCommand("SetLogHandler", iface, id), mHandler(handler)
     { }
     SetLogHandler(wifi_interface_handle iface, int id)
-        : WifiCommand(iface, id)
+        : WifiCommand("SetLogHandler", iface, id)
     { }
 
     int start() {
@@ -564,7 +565,8 @@ class SetAlertHandler : public WifiCommand
 
 public:
     SetAlertHandler(wifi_interface_handle iface, int id, wifi_alert_handler handler)
-        : WifiCommand(iface, id), mHandler(handler), mBuffSize(0), mBuff(NULL), mErrCode(0)
+        : WifiCommand("SetAlertHandler", iface, id), mHandler(handler), mBuffSize(0), mBuff(NULL),
+            mErrCode(0)
     { }
 
     int start() {
@@ -706,7 +708,7 @@ class MemoryDumpCommand: public WifiCommand
 
 public:
     MemoryDumpCommand(wifi_interface_handle iface, wifi_firmware_memory_dump_handler handler)
-        : WifiCommand(iface, 0), mHandler(handler), mBuffSize(0), mBuff(NULL)
+        : WifiCommand("MemoryDumpCommand", iface, 0), mHandler(handler), mBuffSize(0), mBuff(NULL)
     { }
 
     int start() {
