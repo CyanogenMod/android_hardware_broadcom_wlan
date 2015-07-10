@@ -885,7 +885,7 @@ public:
             request.destroy();
         }
 
-        // ALOGE("GetScanResults read %d results", mRetrieved);
+        ALOGV("GetScanResults read %d results", mRetrieved);
         *mNum = mRetrieved;
         return WIFI_SUCCESS;
     }
@@ -969,7 +969,7 @@ public:
                         it.get_type(), it.get_len());
             }
         }
-
+        ALOGV("GetScanResults read %d results", mRetrieved);
         return NL_OK;
     }
 };
@@ -1893,11 +1893,9 @@ wifi_error wifi_set_bssid_blacklist(wifi_request_id id, wifi_interface_handle if
     wifi_handle handle = getWifiHandle(iface);
 
     BssidBlacklistCommand *cmd = new BssidBlacklistCommand(iface, id, &params);
-    wifi_register_cmd(handle, id, cmd);
     wifi_error result = (wifi_error)cmd->start();
-    if (result != WIFI_SUCCESS) {
-        wifi_unregister_cmd(handle, id);
-    }
+    //release the reference of command as well
+    cmd->releaseRef();
     return result;
 }
 
@@ -1991,11 +1989,9 @@ wifi_error wifi_set_bssid_preference(wifi_request_id id, wifi_interface_handle i
     wifi_handle handle = getWifiHandle(iface);
 
     BssidPreferenceCommand *cmd = new BssidPreferenceCommand(iface, id, num_bssid, prefs);
-    wifi_register_cmd(handle, id, cmd);
     wifi_error result = (wifi_error)cmd->start();
-    if (result != WIFI_SUCCESS) {
-        wifi_unregister_cmd(handle, id);
-    }
+    //release the reference of command as well
+    cmd->releaseRef();
     return result;
 }
 
