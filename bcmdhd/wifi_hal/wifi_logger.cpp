@@ -447,19 +447,16 @@ public:
     SetLogHandler(wifi_interface_handle iface, int id, wifi_ring_buffer_data_handler handler)
         : WifiCommand("SetLogHandler", iface, id), mHandler(handler)
     { }
-    SetLogHandler(wifi_interface_handle iface, int id)
-        : WifiCommand("SetLogHandler", iface, id)
-    { }
 
     int start() {
-        ALOGD("Register log handler");
+        ALOGV("Register loghandler");
         registerVendorHandler(GOOGLE_OUI, GOOGLE_DEBUG_RING_EVENT);
         return WIFI_SUCCESS;
     }
 
     virtual int cancel() {
         /* Send a command to driver to stop generating logging events */
-        ALOGD("Reset event handler");
+        ALOGV("Clear loghandler");
 
         WifiRequest request(familyId(), ifaceId());
         int result = request.create(GOOGLE_OUI, LOGGER_RESET_LOGGING);
@@ -477,7 +474,7 @@ public:
 
         /* unregister event handler */
         unregisterVendorHandler(GOOGLE_OUI, GOOGLE_DEBUG_RING_EVENT);
-        ALOGD("Success to reset event handler");
+        ALOGD("Success to clear loghandler");
         return WIFI_SUCCESS;
     }
 
@@ -529,12 +526,15 @@ wifi_error wifi_set_log_handler(wifi_request_id id, wifi_interface_handle iface,
         wifi_ring_buffer_data_handler handler)
 {
     wifi_handle handle = getWifiHandle(iface);
-    SetLogHandler *cmd = new SetLogHandler(iface, id, handler);
+    ALOGV("Loghandler start, handle = %p", handle);
 
-    ALOGI("Logger start, handle = %p", handle);
+    SetLogHandler *cmd = new SetLogHandler(iface, id, handler);
     if (cmd) {
         wifi_register_cmd(handle, id, cmd);
-        return (wifi_error)cmd->start();
+        wifi_error result = (wifi_error)cmd->start();
+        if (result != WIFI_SUCCESS)
+            wifi_unregister_cmd(handle, id);
+        return result;
     } else {
         ALOGD("Out of memory");
         return WIFI_ERROR_OUT_OF_MEMORY;
@@ -544,15 +544,19 @@ wifi_error wifi_set_log_handler(wifi_request_id id, wifi_interface_handle iface,
 wifi_error wifi_reset_log_handler(wifi_request_id id, wifi_interface_handle iface)
 {
     wifi_handle handle = getWifiHandle(iface);
-    SetLogHandler *cmd = new SetLogHandler(iface, id);
+    ALOGV("Loghandler reset, wifi_request_id = %d, handle = %p", id, handle);
 
-    ALOGI("Logger reset, handle = %p", handle);
-    if (cmd) {
+    if (id == -1) {
+        wifi_ring_buffer_data_handler handler;
+        memset(&handler, 0, sizeof(handler));
+
+        SetLogHandler *cmd = new SetLogHandler(iface, id, handler);
         cmd->cancel();
         cmd->releaseRef();
         return WIFI_SUCCESS;
     }
-    return WIFI_ERROR_INVALID_ARGS;
+
+    return wifi_cancel_cmd(id, iface);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -570,8 +574,18 @@ public:
     { }
 
     int start() {
-        ALOGD("Start Alerting");
+        ALOGV("Start Alerting");
         registerVendorHandler(GOOGLE_OUI, GOOGLE_DEBUG_MEM_DUMP_EVENT);
+        return WIFI_SUCCESS;
+    }
+
+    virtual int cancel() {
+        ALOGV("Clear alerthandler");
+
+        /* unregister alert handler */
+        unregisterVendorHandler(GOOGLE_OUI, GOOGLE_DEBUG_MEM_DUMP_EVENT);
+        wifi_unregister_cmd(wifiHandle(), id());
+        ALOGD("Success to clear alerthandler");
         return WIFI_SUCCESS;
     }
 
@@ -691,13 +705,39 @@ wifi_error wifi_set_alert_handler(wifi_request_id id, wifi_interface_handle ifac
         wifi_alert_handler handler)
 {
     wifi_handle handle = getWifiHandle(iface);
-    SetAlertHandler *cmd = new SetAlertHandler(iface, id, handler);
-    ALOGI("Alert start, handle = %p", handle);
+    ALOGV("Alerthandler start, handle = %p", handle);
 
-    wifi_register_cmd(handle, id, cmd);
-    return (wifi_error)cmd->start();
+    SetAlertHandler *cmd = new SetAlertHandler(iface, id, handler);
+
+    if (cmd) {
+        wifi_register_cmd(handle, id, cmd);
+        wifi_error result = (wifi_error)cmd->start();
+        if (result != WIFI_SUCCESS)
+            wifi_unregister_cmd(handle, id);
+        return result;
+    } else {
+        ALOGE("Out of memory");
+        return WIFI_ERROR_OUT_OF_MEMORY;
+    }
 }
 
+wifi_error wifi_reset_alert_handler(wifi_request_id id, wifi_interface_handle iface)
+{
+    wifi_handle handle = getWifiHandle(iface);
+    ALOGV("Alerthandler reset, wifi_request_id = %d, handle = %p", id, handle);
+
+    if (id == -1) {
+        wifi_alert_handler handler;
+        memset(&handler, 0, sizeof(handler));
+
+        SetAlertHandler *cmd = new SetAlertHandler(iface, id, handler);
+        cmd->cancel();
+        cmd->releaseRef();
+        return WIFI_SUCCESS;
+    }
+
+    return wifi_cancel_cmd(id, iface);
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 class MemoryDumpCommand: public WifiCommand
