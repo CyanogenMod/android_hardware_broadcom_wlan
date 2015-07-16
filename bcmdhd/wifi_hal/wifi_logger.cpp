@@ -458,9 +458,11 @@ public:
         /* Send a command to driver to stop generating logging events */
         ALOGV("Clear loghandler");
 
+        /* unregister event handler */
+        unregisterVendorHandler(GOOGLE_OUI, GOOGLE_DEBUG_RING_EVENT);
+
         WifiRequest request(familyId(), ifaceId());
         int result = request.create(GOOGLE_OUI, LOGGER_RESET_LOGGING);
-
         if (result != WIFI_SUCCESS) {
             ALOGE("failed to create reset request; result = %d", result);
             return result;
@@ -472,8 +474,6 @@ public:
             return result;
         }
 
-        /* unregister event handler */
-        unregisterVendorHandler(GOOGLE_OUI, GOOGLE_DEBUG_RING_EVENT);
         ALOGD("Success to clear loghandler");
         return WIFI_SUCCESS;
     }
