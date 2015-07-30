@@ -295,6 +295,12 @@ void wifi_cleanup(wifi_handle handle, wifi_cleaned_up_handler handler)
 
     int bad_commands = 0;
 
+    for (int i = 0; i < info->num_event_cb; i++) {
+        cb_info *cbi = &(info->event_cb[i]);
+        WifiCommand *cmd = (WifiCommand *)cbi->cb_arg;
+        ALOGE("Command left in event_cb %p:%s", cmd, cmd->getType());
+    }
+
     while (info->num_cmd > bad_commands) {
         int num_cmd = info->num_cmd;
         cmd_info *cmdi = &(info->cmd[bad_commands]);
@@ -316,7 +322,7 @@ void wifi_cleanup(wifi_handle handle, wifi_cleaned_up_handler handler)
     for (int i = 0; i < info->num_event_cb; i++) {
         cb_info *cbi = &(info->event_cb[i]);
         WifiCommand *cmd = (WifiCommand *)cbi->cb_arg;
-        ALOGE("Leaked command %p:%s", cmd, cmd->getType());
+        ALOGE("Leaked command %p", cmd);
     }
 
     pthread_mutex_unlock(&info->cb_lock);
