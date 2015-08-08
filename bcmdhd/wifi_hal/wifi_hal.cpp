@@ -1009,7 +1009,12 @@ static wifi_error wifi_start_rssi_monitoring(wifi_request_id id, wifi_interface_
     wifi_handle handle = getWifiHandle(iface);
     SetRSSIMonitorCommand *cmd = new SetRSSIMonitorCommand(id, iface, max_rssi, min_rssi, eh);
     wifi_register_cmd(handle, id, cmd);
-    return (wifi_error)cmd->start();
+
+    wifi_error result = (wifi_error)cmd->start();
+    if (result != WIFI_SUCCESS) {
+        wifi_unregister_cmd(handle, id);
+    }
+    return result;
 }
 
 
