@@ -662,7 +662,7 @@ public:
         result = requestResponse(request);
         if (result != WIFI_SUCCESS) {
             ALOGE("failed to start scan; result = %d", result);
-            registerVendorHandler(GOOGLE_OUI, GSCAN_EVENT_COMPLETE_SCAN);
+            unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_COMPLETE_SCAN);
             unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_SCAN_RESULTS_AVAILABLE);
             return result;
         }
