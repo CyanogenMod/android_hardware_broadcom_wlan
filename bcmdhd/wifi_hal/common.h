@@ -154,7 +154,7 @@ typedef struct {
     int cleanup_socks[2];                           // sockets used to implement wifi_cleanup
 
     bool in_event_loop;                             // Indicates that event loop is active
-    bool clean_up;                                  // Indication to clean up the socket
+    bool clean_up;                                  // Indication to exit since cleanup has started
 
     wifi_internal_event_handler event_handler;      // default event handler
     wifi_cleaned_up_handler cleaned_up_handler;     // socket cleaned up handler
