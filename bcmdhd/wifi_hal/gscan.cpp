@@ -935,6 +935,10 @@ public:
                         num = it2.get_u32();
                         ALOGV("retrieved num_results: %d", num);
                     } else if (it2.get_type() == GSCAN_ATTRIBUTE_SCAN_RESULTS) {
+                        if (mRetrieved >= mMax) {
+                            ALOGW("Stored %d scans, ignoring excess results", mRetrieved);
+                            break;
+                        }
                         num = it2.get_len() / sizeof(wifi_scan_result);
                         num = min(MAX_RESULTS - mNextScanResult, num);
                         num = min((int)MAX_AP_CACHE_PER_SCAN, num);
@@ -956,9 +960,6 @@ public:
                                 &(mScanResults[mNextScanResult]), num * sizeof(wifi_scan_result));
                         mNextScanResult += num;
                         mRetrieved++;
-                        if (mRetrieved >= mMax && it.has_next()) {
-                            ALOGW("Ignoring attributes after this scan");
-                        }
                     } else {
                         ALOGW("Ignoring invalid attribute type = %d, size = %d",
                                 it.get_type(), it.get_len());
