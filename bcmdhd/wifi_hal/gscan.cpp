@@ -19,7 +19,7 @@
 #include "sync.h"
 
 #define LOG_TAG  "WifiHAL"
-//#define LOG_NDEBUG 1         //uncomment to enable verbose logging
+//#define LOG_NDEBUG 0         //uncomment to enable verbose logging
 
 #include <utils/Log.h>
 
