@@ -323,7 +323,7 @@ void wifi_cleanup(wifi_handle handle, wifi_cleaned_up_handler handler)
     for (int i = 0; i < info->num_event_cb; i++) {
         cb_info *cbi = &(info->event_cb[i]);
         WifiCommand *cmd = (WifiCommand *)cbi->cb_arg;
-        ALOGE("Command left in event_cb %p:%s", cmd, cmd->getType());
+        ALOGI("Command left in event_cb %p:%s", cmd, (cmd ? cmd->getType(): ""));
     }
 
     while (info->num_cmd > bad_commands) {
@@ -331,14 +331,14 @@ void wifi_cleanup(wifi_handle handle, wifi_cleaned_up_handler handler)
         cmd_info *cmdi = &(info->cmd[bad_commands]);
         WifiCommand *cmd = cmdi->cmd;
         if (cmd != NULL) {
-            ALOGD("Cancelling command %p:%s", cmd, cmd->getType());
+            ALOGI("Cancelling command %p:%s", cmd, cmd->getType());
             pthread_mutex_unlock(&info->cb_lock);
             cmd->cancel();
             pthread_mutex_lock(&info->cb_lock);
             /* release reference added when command is saved */
             cmd->releaseRef();
             if (num_cmd == info->num_cmd) {
-                ALOGE("Cancelling command %p:%s did not work", cmd, cmd->getType());
+                ALOGI("Cancelling command %p:%s did not work", cmd, (cmd ? cmd->getType(): ""));
                 bad_commands++;
             }
         }
