@@ -19,7 +19,7 @@
 #include "sync.h"
 
 #define LOG_TAG  "WifiHAL"
-//#define LOG_NDEBUG 1         //uncomment to enable verbose logging
+//#define LOG_NDEBUG 0         //uncomment to enable verbose logging
 
 #include <utils/Log.h>
 
@@ -923,8 +923,8 @@ public:
                 mCompleted = it.get_u8();
                 ALOGV("retrieved mCompleted flag : %d", mCompleted);
             } else if (it.get_type() == GSCAN_ATTRIBUTE_SCAN_RESULTS || it.get_type() == 0) {
+                int scan_id = 0, flags = 0, num = 0;
                 for (nl_iterator it2(it.get()); it2.has_next(); it2.next()) {
-                    int scan_id = 0, flags = 0, num = 0;
                     if (it2.get_type() == GSCAN_ATTRIBUTE_SCAN_ID) {
                         scan_id = it2.get_u32();
                         ALOGV("retrieved scan_id : 0x%0x", scan_id);
@@ -935,6 +935,10 @@ public:
                         num = it2.get_u32();
                         ALOGV("retrieved num_results: %d", num);
                     } else if (it2.get_type() == GSCAN_ATTRIBUTE_SCAN_RESULTS) {
+                        if (mRetrieved >= mMax) {
+                            ALOGW("Stored %d scans, ignoring excess results", mRetrieved);
+                            break;
+                        }
                         num = it2.get_len() / sizeof(wifi_scan_result);
                         num = min(MAX_RESULTS - mNextScanResult, num);
                         num = min((int)MAX_AP_CACHE_PER_SCAN, num);
@@ -952,13 +956,11 @@ public:
                         mScans[mRetrieved].scan_id = scan_id;
                         mScans[mRetrieved].flags = flags;
                         mScans[mRetrieved].num_results = num;
+                        ALOGV("Setting result of scan_id : 0x%0x", mScans[mRetrieved].scan_id);
                         memcpy(mScans[mRetrieved].results,
                                 &(mScanResults[mNextScanResult]), num * sizeof(wifi_scan_result));
                         mNextScanResult += num;
                         mRetrieved++;
-                        if (mRetrieved >= mMax && it.has_next()) {
-                            ALOGW("Ignoring attributes after this scan");
-                        }
                     } else {
                         ALOGW("Ignoring invalid attribute type = %d, size = %d",
                                 it.get_type(), it.get_len());
