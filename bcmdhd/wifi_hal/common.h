@@ -142,7 +142,7 @@ typedef struct {
 
 typedef struct {
     wifi_handle handle;                             // handle to wifi data
-    char name[8+1];                                 // interface name + trailing null
+    char name[IFNAMSIZ+1];                          // interface name + trailing null
     int  id;                                        // id to use when talking to driver
 } interface_info;
 
