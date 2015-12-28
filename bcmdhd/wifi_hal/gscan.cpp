@@ -449,7 +449,7 @@ class ScanCommand : public WifiCommand
     wifi_scan_cmd_params *mParams;
     wifi_scan_result_handler mHandler;
     static unsigned mGlobalFullScanBuckets;
-    bool mLocalFullScanBuckets;
+    unsigned mLocalFullScanBuckets;
 public:
     ScanCommand(wifi_interface_handle iface, int id, wifi_scan_cmd_params *params,
                 wifi_scan_result_handler handler)
