@@ -140,6 +140,7 @@ wifi_error init_wifi_vendor_hal_func_table(wifi_hal_fn *fn)
     fn->wifi_set_nodfs_flag = wifi_set_nodfs_flag;
     fn->wifi_start_logging = wifi_start_logging;
     fn->wifi_set_epno_list = wifi_set_epno_list;
+    fn->wifi_reset_epno_list = wifi_reset_epno_list;
     fn->wifi_set_country_code = wifi_set_country_code;
     fn->wifi_get_firmware_memory_dump = wifi_get_firmware_memory_dump;
     fn->wifi_set_log_handler = wifi_set_log_handler;
@@ -151,11 +152,7 @@ wifi_error init_wifi_vendor_hal_func_table(wifi_hal_fn *fn)
     fn->wifi_get_logger_supported_feature_set = wifi_get_logger_supported_feature_set;
     fn->wifi_get_ring_data = wifi_get_ring_data;
     fn->wifi_get_driver_version = wifi_get_driver_version;
-    fn->wifi_set_ssid_white_list = wifi_set_ssid_white_list;
-    fn->wifi_set_gscan_roam_params = wifi_set_gscan_roam_params;
-    fn->wifi_set_bssid_preference = wifi_set_bssid_preference;
     fn->wifi_set_bssid_blacklist = wifi_set_bssid_blacklist;
-    fn->wifi_enable_lazy_roam = wifi_enable_lazy_roam;
     fn->wifi_start_rssi_monitoring = wifi_start_rssi_monitoring;
     fn->wifi_stop_rssi_monitoring = wifi_stop_rssi_monitoring;
     fn->wifi_start_sending_offloaded_packet = wifi_start_sending_offloaded_packet;
