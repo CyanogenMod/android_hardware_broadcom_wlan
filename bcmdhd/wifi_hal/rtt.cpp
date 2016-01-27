@@ -450,7 +450,7 @@ public:
                                 rtt_result->success_number, rtt_result->number_per_burst_peer,
                                 get_err_info(rtt_result->status), rtt_result->retry_after_duration,
                                 rtt_result->rssi, rtt_result->rx_rate.bitrate * 100,
-                                rtt_result->rtt/10, rtt_result->rtt_sd, rtt_result->distance,
+                                rtt_result->rtt/10, rtt_result->rtt_sd, rtt_result->distance_mm / 10,
                                 rtt_result->burst_duration, rtt_result->negotiated_burst_num);
                         currentIdx++;
                     }
