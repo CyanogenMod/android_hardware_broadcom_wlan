@@ -335,12 +335,12 @@ void wifi_cleanup(wifi_handle handle, wifi_cleaned_up_handler handler)
             pthread_mutex_unlock(&info->cb_lock);
             cmd->cancel();
             pthread_mutex_lock(&info->cb_lock);
-            /* release reference added when command is saved */
-            cmd->releaseRef();
             if (num_cmd == info->num_cmd) {
                 ALOGI("Cancelling command %p:%s did not work", cmd, (cmd ? cmd->getType(): ""));
                 bad_commands++;
             }
+            /* release reference added when command is saved */
+            cmd->releaseRef();
         }
     }
 
