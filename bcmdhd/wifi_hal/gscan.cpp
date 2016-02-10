@@ -141,7 +141,8 @@ typedef enum {
 wifi_error wifi_enable_full_scan_results(wifi_request_id id, wifi_interface_handle iface,
          wifi_scan_result_handler handler);
 wifi_error wifi_disable_full_scan_results(wifi_request_id id, wifi_interface_handle iface);
-
+int wifi_handle_full_scan_event(wifi_request_id id, WifiEvent& event,
+         wifi_scan_result_handler handler);
 
 /////////////////////////////////////////////////////////////////////////////
 
@@ -418,28 +419,7 @@ public:
 
     virtual int handleEvent(WifiEvent& event) {
         ALOGV("Full scan results:  Got an event");
-        //event.log();
-
-        nlattr *vendor_data = event.get_attribute(NL80211_ATTR_VENDOR_DATA);
-        unsigned int len = event.get_vendor_data_len();
-
-        if (vendor_data == NULL || len < sizeof(wifi_scan_result)) {
-            ALOGI("Full scan results: No scan results found");
-            return NL_SKIP;
-        }
-
-        wifi_scan_result *result = (wifi_scan_result *)event.get_vendor_data();
-
-        // TODO: fill in buckets scanned
-        if(*mHandler.on_full_scan_result)
-            (*mHandler.on_full_scan_result)(id(), result, 0);
-
-        ALOGV("Full scan result: %-32s %02x:%02x:%02x:%02x:%02x:%02x %d %d %lld %lld %lld\n",
-            result->ssid, result->bssid[0], result->bssid[1], result->bssid[2], result->bssid[3],
-            result->bssid[4], result->bssid[5], result->rssi, result->channel, result->ts,
-            result->rtt, result->rtt_sd);
-
-        return NL_SKIP;
+        return wifi_handle_full_scan_event(id(), event, mHandler);
     }
 
 };
@@ -449,13 +429,10 @@ class ScanCommand : public WifiCommand
 {
     wifi_scan_cmd_params *mParams;
     wifi_scan_result_handler mHandler;
-    static unsigned mGlobalFullScanBuckets;
-    unsigned mLocalFullScanBuckets;
 public:
     ScanCommand(wifi_interface_handle iface, int id, wifi_scan_cmd_params *params,
                 wifi_scan_result_handler handler)
-        : WifiCommand("ScanCommand", iface, id), mParams(params), mHandler(handler),
-          mLocalFullScanBuckets(0)
+        : WifiCommand("ScanCommand", iface, id), mParams(params), mHandler(handler)
     { }
 
     int createSetupRequest(WifiRequest& request) {
@@ -570,56 +547,6 @@ public:
         return createFeatureRequest(request, GSCAN_SUBCMD_ENABLE_GSCAN, 0);
     }
 
-    int enableFullScanResultsIfRequired() {
-        /* temporary workaround till we have full support for per bucket scans */
-
-        int nBuckets = 0;
-        for (int i = 0; i < mParams->num_buckets; i++) {
-            if (mParams->buckets[i].report_events == 2) {
-                nBuckets++;
-            }
-        }
-
-        ALOGV("enableFullScanResultsIfRequired num %u needed %u global %u",
-            mParams->num_buckets, nBuckets, mGlobalFullScanBuckets);
-
-        if (mGlobalFullScanBuckets == 0 && nBuckets != 0) {
-            int result = wifi_enable_full_scan_results(0x1000, ifaceHandle(), mHandler);
-            if (result != WIFI_SUCCESS) {
-                ALOGE("failed to enable full scan results");
-                return result;
-            } else {
-                ALOGV("successfully enabled full scan results");
-            }
-        } else {
-            ALOGV("mGlobalFullScanBuckets = %d, nBuckets = %d", mGlobalFullScanBuckets, nBuckets);
-        }
-
-        mLocalFullScanBuckets = nBuckets;
-        mGlobalFullScanBuckets += nBuckets;
-        return WIFI_SUCCESS;
-    }
-
-    int disableFullScanResultsIfRequired() {
-        /* temporary workaround till we have full support for per bucket scans */
-
-        if (mLocalFullScanBuckets == 0) {
-            return WIFI_SUCCESS;
-        }
-
-        mGlobalFullScanBuckets -= mLocalFullScanBuckets;
-        if (mGlobalFullScanBuckets == 0) {
-            int result = wifi_disable_full_scan_results(0x1000, ifaceHandle());
-            if (result != WIFI_SUCCESS) {
-                ALOGE("failed to disable full scan results");
-            } else {
-                ALOGV("successfully disable full scan results");
-            }
-        }
-
-        return WIFI_SUCCESS;
-    }
-
     int start() {
         ALOGV("GSCAN start");
         WifiRequest request(familyId(), ifaceId());
@@ -659,16 +586,16 @@ public:
 
         registerVendorHandler(GOOGLE_OUI, GSCAN_EVENT_SCAN_RESULTS_AVAILABLE);
         registerVendorHandler(GOOGLE_OUI, GSCAN_EVENT_COMPLETE_SCAN);
+        registerVendorHandler(GOOGLE_OUI, GSCAN_EVENT_FULL_SCAN_RESULTS);
 
         result = requestResponse(request);
         if (result != WIFI_SUCCESS) {
             ALOGE("failed to start scan; result = %d", result);
             unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_COMPLETE_SCAN);
             unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_SCAN_RESULTS_AVAILABLE);
+            unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_FULL_SCAN_RESULTS);
             return result;
         }
-
-        result = enableFullScanResultsIfRequired();
         return result;
     }
 
@@ -688,8 +615,7 @@ public:
 
         unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_COMPLETE_SCAN);
         unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_SCAN_RESULTS_AVAILABLE);
-        disableFullScanResultsIfRequired();
-
+        unregisterVendorHandler(GOOGLE_OUI, GSCAN_EVENT_FULL_SCAN_RESULTS);
         return WIFI_SUCCESS;
     }
 
@@ -706,7 +632,7 @@ public:
         int len = event.get_vendor_data_len();
         int event_id = event.get_vendor_subcmd();
 
-        if(event_id == GSCAN_EVENT_COMPLETE_SCAN) {
+        if (event_id == GSCAN_EVENT_COMPLETE_SCAN) {
             if (vendor_data == NULL || len != 4) {
                 ALOGI("Scan complete type not mentioned!");
                 return NL_SKIP;
@@ -717,7 +643,7 @@ public:
             ALOGV("Scan complete: Received event type %d", evt_type);
             if(*mHandler.on_scan_event)
                 (*mHandler.on_scan_event)(evt_type, evt_type);
-        } else {
+        } else if (event_id == GSCAN_EVENT_SCAN_RESULTS_AVAILABLE) {
 
             if (vendor_data == NULL || len != 4) {
                 ALOGI("No scan results found");
@@ -728,12 +654,12 @@ public:
             ALOGV("Found %d scan results", num);
             if(*mHandler.on_scan_event)
                 (*mHandler.on_scan_event)(id(), WIFI_SCAN_RESULTS_AVAILABLE);
+        } else if (event_id == GSCAN_EVENT_FULL_SCAN_RESULTS) {
+            wifi_handle_full_scan_event(id(), event, mHandler);
         }
         return NL_SKIP;
     }
 };
-
-unsigned ScanCommand::mGlobalFullScanBuckets = 0;
 
 wifi_error wifi_start_gscan(
         wifi_request_id id,
@@ -794,6 +720,33 @@ wifi_error wifi_enable_full_scan_results(
     }
     return result;
 }
+
+int wifi_handle_full_scan_event(
+        wifi_request_id id,
+        WifiEvent& event,
+        wifi_scan_result_handler handler)
+{
+    nlattr *vendor_data = event.get_attribute(NL80211_ATTR_VENDOR_DATA);
+    unsigned int len = event.get_vendor_data_len();
+
+    if (vendor_data == NULL || len < sizeof(wifi_scan_result)) {
+        ALOGI("Full scan results: No scan results found");
+        return NL_SKIP;
+    }
+
+    wifi_scan_result *result = (wifi_scan_result *)event.get_vendor_data();
+
+    if (handler.on_full_scan_result)
+        (*handler.on_full_scan_result)(id, result, 0);
+
+    ALOGV("Full scan result: %-32s %02x:%02x:%02x:%02x:%02x:%02x %d %d %lld %lld %lld\n",
+        result->ssid, result->bssid[0], result->bssid[1], result->bssid[2], result->bssid[3],
+        result->bssid[4], result->bssid[5], result->rssi, result->channel, result->ts,
+        result->rtt, result->rtt_sd);
+
+    return NL_SKIP;
+}
+
 
 wifi_error wifi_disable_full_scan_results(wifi_request_id id, wifi_interface_handle iface)
 {
@@ -1815,4 +1768,3 @@ wifi_error wifi_reset_passpoint_list(wifi_request_id id, wifi_interface_handle i
 {
     return wifi_cancel_cmd(id, iface);
 }
-
