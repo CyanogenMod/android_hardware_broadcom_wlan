@@ -65,6 +65,14 @@ typedef enum {
     ANDROID_NL80211_SUBCMD_WIFI_OFFLOAD_RANGE_START = 0x1600,
     ANDROID_NL80211_SUBCMD_WIFI_OFFLOAD_RANGE_END   = 0x16FF,
 
+    /* define all NAN related commands between 0x1700 and 0x17FF */
+    ANDROID_NL80211_SUBCMD_NAN_RANGE_START = 0x1700,
+    ANDROID_NL80211_SUBCMD_NAN_RANGE_END   = 0x17FF,
+
+    /* define all Android Packet Filter related commands between 0x1800 and 0x18FF */
+    ANDROID_NL80211_SUBCMD_PKT_FILTER_RANGE_START = 0x1800,
+    ANDROID_NL80211_SUBCMD_PKT_FILTER_RANGE_END   = 0x18FF,
+
     /* This is reserved for future usage */
 
 } ANDROID_VENDOR_SUB_COMMAND;
@@ -104,8 +112,10 @@ typedef enum {
     WIFI_SUBCMD_SET_RSSI_MONITOR,                       /* 0x1016 */
     /* Add more sub commands here */
 
-    GSCAN_SUBCMD_MAX
+    GSCAN_SUBCMD_MAX,
 
+    APF_SUBCMD_GET_CAPABILITIES = ANDROID_NL80211_SUBCMD_PKT_FILTER_RANGE_START,
+    APF_SUBCMD_SET_FILTER,
 } WIFI_SUB_COMMAND;
 
 typedef enum {
