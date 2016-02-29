@@ -35,6 +35,9 @@ typedef enum {
     RTT_SUBCMD_SET_CONFIG = ANDROID_NL80211_SUBCMD_RTT_RANGE_START,
     RTT_SUBCMD_CANCEL_CONFIG,
     RTT_SUBCMD_GETCAPABILITY,
+    RTT_SUBCMD_GETAVAILCHANNEL,
+    RTT_SUBCMD_SET_RESPONDER,
+    RTT_SUBCMD_CANCEL_RESPONDER,
 } RTT_SUB_COMMAND;
 
 typedef enum {
@@ -154,6 +157,136 @@ protected:
 
         return NL_OK;
     }
+};
+
+
+class GetRttAvailableChannelCommand : public WifiCommand
+{
+    wifi_channel_info* mChannelInfo;
+public:
+    GetRttAvailableChannelCommand(wifi_interface_handle iface, wifi_channel_info *channel)
+        : WifiCommand("GetRttAvailableChannelCommand", iface, 0), mChannelInfo(channel)
+    {
+        memset(mChannelInfo, 0 , sizeof(*mChannelInfo));
+
+    }
+
+    virtual int create() {
+        ALOGD("Creating message to get available channel ; iface = %d", mIfaceInfo->id);
+
+        int ret = mMsg.create(GOOGLE_OUI, RTT_SUBCMD_GETAVAILCHANNEL);
+        if (ret < 0) {
+            return ret;
+        }
+
+        return ret;
+    }
+
+protected:
+    virtual int handleResponse(WifiEvent& reply) {
+
+        ALOGD("In GetRttAvailableChannelCommand::handleResponse");
+
+        if (reply.get_cmd() != NL80211_CMD_VENDOR) {
+            ALOGD("Ignoring reply with cmd = %d", reply.get_cmd());
+            return NL_SKIP;
+        }
+
+        int id = reply.get_vendor_id();
+        int subcmd = reply.get_vendor_subcmd();
+
+        void *data = reply.get_vendor_data();
+        int len = reply.get_vendor_data_len();
+
+        ALOGD("Id = %0x, subcmd = %d, len = %d, expected len = %d", id, subcmd, len,
+                sizeof(*mChannelInfo));
+
+        memcpy(mChannelInfo, data, min(len, (int) sizeof(*mChannelInfo)));
+
+        return NL_OK;
+    }
+};
+
+
+class EnableResponderCommand : public WifiCommand
+{
+    wifi_channel_info  mChannelInfo;
+    wifi_channel_info* mChannelUsed;
+    unsigned m_max_duration_sec;
+public:
+    EnableResponderCommand(wifi_interface_handle iface, int id, wifi_channel_info channel_hint,
+            unsigned max_duration_seconds, wifi_channel_info *channel_used)
+            : WifiCommand("EnableResponderCommand", iface, 0), mChannelInfo(channel_hint),
+            m_max_duration_sec(max_duration_seconds), mChannelUsed(channel_used)
+    {
+        memset(mChannelUsed, 0 , sizeof(*mChannelUsed));
+
+    }
+
+    virtual int create() {
+        ALOGD("Creating message to set responder ; iface = %d", mIfaceInfo->id);
+
+        int ret = mMsg.create(GOOGLE_OUI, RTT_SUBCMD_SET_RESPONDER);
+        if (ret < 0) {
+            return ret;
+        }
+
+        return ret;
+    }
+
+protected:
+    virtual int handleResponse(WifiEvent& reply) {
+
+        ALOGD("In EnableResponderCommand::handleResponse");
+
+        if (reply.get_cmd() != NL80211_CMD_VENDOR) {
+            ALOGD("Ignoring reply with cmd = %d", reply.get_cmd());
+            return NL_SKIP;
+        }
+
+        int id = reply.get_vendor_id();
+        int subcmd = reply.get_vendor_subcmd();
+
+        void *data = reply.get_vendor_data();
+        int len = reply.get_vendor_data_len();
+
+        ALOGD("Id = %0x, subcmd = %d, len = %d, expected len = %d", id, subcmd, len,
+                sizeof(*mChannelUsed));
+
+        memcpy(mChannelUsed, data, min(len, (int) sizeof(*mChannelUsed)));
+
+        return NL_OK;
+    }
+};
+
+
+class CancelResponderCommand : public WifiCommand
+{
+
+public:
+    CancelResponderCommand(wifi_interface_handle iface, int id)
+        : WifiCommand("CancelResponderCommand", iface, 0)/*, mChannelInfo(channel)*/
+    {
+
+    }
+
+    virtual int create() {
+        ALOGD("Creating message to cancel responder ; iface = %d", mIfaceInfo->id);
+
+        int ret = mMsg.create(GOOGLE_OUI, RTT_SUBCMD_CANCEL_RESPONDER);
+        if (ret < 0) {
+            return ret;
+        }
+
+        return ret;
+    }
+
+protected:
+    virtual int handleResponse(WifiEvent& reply) {
+        /* Nothing to do on response! */
+        return NL_SKIP;
+    }
+
 };
 
 
@@ -507,3 +640,35 @@ wifi_error wifi_get_rtt_capabilities(wifi_interface_handle iface,
     GetRttCapabilitiesCommand command(iface, capabilities);
     return (wifi_error) command.requestResponse();
 }
+
+/* API to get the channel */
+wifi_error wifi_rtt_get_available_channel(wifi_interface_handle iface, wifi_channel_info* channel)
+{
+    GetRttAvailableChannelCommand command(iface, channel);
+    return (wifi_error) command.requestResponse();
+
+}
+
+/**
+ * Enable RTT responder mode.
+ * channel_hint - hint of the channel information where RTT responder should be enabled on.
+ * max_duration_seconds - timeout of responder mode.
+ * channel_used - channel used for RTT responder, NULL if responder is not enabled.
+ */
+wifi_error wifi_enable_responder(wifi_request_id id, wifi_interface_handle iface,
+                                wifi_channel_info channel_hint, unsigned max_duration_seconds,
+                                wifi_channel_info* channel_used )
+{
+    EnableResponderCommand command(iface, id, channel_hint, max_duration_seconds, channel_used);
+    return (wifi_error) command.requestResponse();
+}
+
+/**
+ * Disable RTT responder mode.
+ */
+wifi_error wifi_disable_responder(wifi_request_id id, wifi_interface_handle iface)
+{
+    CancelResponderCommand command(iface, id);
+    return (wifi_error) command.requestResponse();
+}
+
