@@ -15,7 +15,9 @@
 #define DEFAULT_EVENT_CB_SIZE   (64)
 #define DEFAULT_CMD_SIZE        (64)
 #define DOT11_OUI_LEN             3
+#define DOT11_MAX_SSID_LEN        32
 
+#define MAX_PROBE_RESP_IE_LEN      2048
 /*
  Vendor OUI - This is a unique identifier that identifies organization. Lets
  code Android specific functions with Google OUI; although vendors can do more
@@ -179,13 +181,33 @@ typedef struct {
 #define PNO_SSID_LOST    0x2
 
 typedef struct wifi_pno_result {
-    unsigned char ssid[32];
+    unsigned char ssid[DOT11_MAX_SSID_LEN];
     unsigned char ssid_len;
     signed char rssi;
     u16 channel;
     u16 flags;
     mac_addr  bssid;
 } wifi_pno_result_t;
+
+typedef struct wifi_gscan_result {
+    u64 ts;                           // Time of discovery
+    u8 ssid[DOT11_MAX_SSID_LEN+1];    // null terminated
+    mac_addr bssid;                   // BSSID
+    u32 channel;                      // channel frequency in MHz
+    s32 rssi;                         // in db
+    u64 rtt;                          // in nanoseconds
+    u64 rtt_sd;                       // standard deviation in rtt
+    u16 beacon_period;                // units are Kusec
+    u16 capability;                   // Capability information
+    u32 pad;
+} wifi_gscan_result_t;
+
+typedef struct wifi_gscan_full_result {
+    wifi_gscan_result_t fixed;
+    u32 scan_ch_bucket;              // scan chbucket bitmask
+    u32 ie_length;                   // byte length of Information Elements
+    u8  ie_data[1];                  // IE data to follow
+} wifi_gscan_full_result_t;
 
 wifi_error wifi_register_handler(wifi_handle handle, int cmd, nl_recvmsg_msg_cb_t func, void *arg);
 wifi_error wifi_register_vendor_handler(wifi_handle handle,
