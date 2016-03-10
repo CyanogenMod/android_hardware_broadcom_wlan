@@ -42,11 +42,6 @@
 #define WIFI_HAL_CMD_SOCK_PORT       644
 #define WIFI_HAL_EVENT_SOCK_PORT     645
 
-#define FEATURE_SET                  0
-#define FEATURE_SET_MATRIX           1
-#define ATTR_NODFS_VALUE             3
-#define ATTR_COUNTRY_CODE            4
-
 static void internal_event_handler(wifi_handle handle, int events);
 static int internal_no_seq_check(nl_msg *msg, void *arg);
 static int internal_valid_message_handler(nl_msg *msg, void *arg);
@@ -60,11 +55,16 @@ static wifi_error wifi_set_packet_filter(wifi_interface_handle handle,
                             const u8 *program, u32 len);
 static wifi_error wifi_get_packet_filter_capabilities(wifi_interface_handle handle,
                 u32 *version, u32 *max_len);
+static wifi_error wifi_configure_nd_offload(wifi_interface_handle iface, u8 enable);
 
 typedef enum wifi_attr {
     ANDR_WIFI_ATTRIBUTE_NUM_FEATURE_SET,
     ANDR_WIFI_ATTRIBUTE_FEATURE_SET,
-    ANDR_WIFI_ATTRIBUTE_PNO_RANDOM_MAC_OUI
+    ANDR_WIFI_ATTRIBUTE_PNO_RANDOM_MAC_OUI,
+    ANDR_WIFI_ATTRIBUTE_NODFS_SET,
+    ANDR_WIFI_ATTRIBUTE_COUNTRY,
+    ANDR_WIFI_ATTRIBUTE_ND_OFFLOAD_VALUE
+    // Add more attribute here
 } wifi_attr_t;
 
 enum wifi_rssi_monitor_attr {
@@ -174,6 +174,7 @@ wifi_error init_wifi_vendor_hal_func_table(wifi_hal_fn *fn)
     fn->wifi_set_bssid_blacklist = wifi_set_bssid_blacklist;
     fn->wifi_start_rssi_monitoring = wifi_start_rssi_monitoring;
     fn->wifi_stop_rssi_monitoring = wifi_stop_rssi_monitoring;
+    fn->wifi_configure_nd_offload = wifi_configure_nd_offload;
     fn->wifi_start_sending_offloaded_packet = wifi_start_sending_offloaded_packet;
     fn->wifi_stop_sending_offloaded_packet = wifi_stop_sending_offloaded_packet;
     fn->wifi_start_pkt_fate_monitoring = wifi_start_pkt_fate_monitoring;
@@ -666,7 +667,7 @@ public:
         }
 
         nlattr *data = mMsg.attr_start(NL80211_ATTR_VENDOR_DATA);
-        ret = mMsg.put_u32(ATTR_NODFS_VALUE, mNoDfs);
+        ret = mMsg.put_u32(ANDR_WIFI_ATTRIBUTE_NODFS_SET, mNoDfs);
         if (ret < 0) {
              return ret;
         }
@@ -694,7 +695,7 @@ public:
         }
 
         nlattr *data = mMsg.attr_start(NL80211_ATTR_VENDOR_DATA);
-        ret = mMsg.put_string(ATTR_COUNTRY_CODE, mCountryCode);
+        ret = mMsg.put_string(ANDR_WIFI_ATTRIBUTE_COUNTRY, mCountryCode);
         if (ret < 0) {
             return ret;
         }
@@ -958,6 +959,35 @@ class AndroidPktFilterCommand : public WifiCommand {
     }
 };
 
+class SetNdoffloadCommand : public WifiCommand {
+
+private:
+    u8 mEnable;
+public:
+    SetNdoffloadCommand(wifi_interface_handle handle, u8 enable)
+        : WifiCommand("SetNdoffloadCommand", handle, 0) {
+        mEnable = enable;
+    }
+    virtual int create() {
+        int ret;
+
+        ret = mMsg.create(GOOGLE_OUI, WIFI_SUBCMD_CONFIG_ND_OFFLOAD);
+        if (ret < 0) {
+            ALOGE("Can't create message to send to driver - %d", ret);
+            return ret;
+        }
+
+        nlattr *data = mMsg.attr_start(NL80211_ATTR_VENDOR_DATA);
+        ret = mMsg.put_u8(ANDR_WIFI_ATTRIBUTE_ND_OFFLOAD_VALUE, mEnable);
+        if (ret < 0) {
+             return ret;
+        }
+
+        mMsg.attr_end(data);
+        return WIFI_SUCCESS;
+    }
+};
+
 class GetFeatureSetCommand : public WifiCommand {
 
 private:
@@ -981,9 +1011,9 @@ public:
     virtual int create() {
         int ret;
 
-        if(feature_type == FEATURE_SET) {
+        if(feature_type == ANDR_WIFI_ATTRIBUTE_NUM_FEATURE_SET) {
             ret = mMsg.create(GOOGLE_OUI, WIFI_SUBCMD_GET_FEATURE_SET);
-        } else if (feature_type == FEATURE_SET_MATRIX) {
+        } else if (feature_type == ANDR_WIFI_ATTRIBUTE_FEATURE_SET) {
             ret = mMsg.create(GOOGLE_OUI, WIFI_SUBCMD_GET_FEATURE_SET_MATRIX);
         } else {
             ALOGE("Unknown feature type %d", feature_type);
@@ -1018,7 +1048,7 @@ protected:
             ALOGE("no vendor data in GetFeatureSetCommand response; ignoring it");
             return NL_SKIP;
         }
-        if(feature_type == FEATURE_SET) {
+        if(feature_type == ANDR_WIFI_ATTRIBUTE_NUM_FEATURE_SET) {
             void *data = reply.get_vendor_data();
             if(!fset) {
                 ALOGE("Buffers pointers not set");
@@ -1155,14 +1185,15 @@ wifi_error wifi_get_iface_name(wifi_interface_handle handle, char *name, size_t 
 
 wifi_error wifi_get_supported_feature_set(wifi_interface_handle handle, feature_set *set)
 {
-    GetFeatureSetCommand command(handle, FEATURE_SET, set, NULL, NULL, 1);
+    GetFeatureSetCommand command(handle, ANDR_WIFI_ATTRIBUTE_NUM_FEATURE_SET, set, NULL, NULL, 1);
     return (wifi_error) command.requestResponse();
 }
 
 wifi_error wifi_get_concurrency_matrix(wifi_interface_handle handle, int set_size_max,
        feature_set set[], int *set_size)
 {
-    GetFeatureSetCommand command(handle, FEATURE_SET_MATRIX, NULL, set, set_size, set_size_max);
+    GetFeatureSetCommand command(handle, ANDR_WIFI_ATTRIBUTE_FEATURE_SET, NULL,
+            set, set_size, set_size_max);
     return (wifi_error) command.requestResponse();
 }
 
@@ -1241,6 +1272,12 @@ static wifi_error wifi_set_packet_filter(wifi_interface_handle handle,
 
     AndroidPktFilterCommand *cmd = new AndroidPktFilterCommand(handle, program, len);
     return (wifi_error)cmd->start();
+}
+
+static wifi_error wifi_configure_nd_offload(wifi_interface_handle handle, u8 enable)
+{
+    SetNdoffloadCommand command(handle, enable);
+    return (wifi_error) command.requestResponse();
 }
 
 /////////////////////////////////////////////////////////////////////////////
