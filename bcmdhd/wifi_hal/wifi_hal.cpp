@@ -56,6 +56,10 @@ static wifi_error wifi_init_interfaces(wifi_handle handle);
 static wifi_error wifi_start_rssi_monitoring(wifi_request_id id, wifi_interface_handle
                         iface, s8 max_rssi, s8 min_rssi, wifi_rssi_event_handler eh);
 static wifi_error wifi_stop_rssi_monitoring(wifi_request_id id, wifi_interface_handle iface);
+static wifi_error wifi_set_packet_filter(wifi_interface_handle handle,
+                            const u8 *program, u32 len);
+static wifi_error wifi_get_packet_filter_capabilities(wifi_interface_handle handle,
+                u32 *version, u32 *max_len);
 
 typedef enum wifi_attr {
     ANDR_WIFI_ATTRIBUTE_NUM_FEATURE_SET,
@@ -67,6 +71,18 @@ enum wifi_rssi_monitor_attr {
     RSSI_MONITOR_ATTRIBUTE_MAX_RSSI,
     RSSI_MONITOR_ATTRIBUTE_MIN_RSSI,
     RSSI_MONITOR_ATTRIBUTE_START,
+};
+
+enum wifi_apf_attr {
+    APF_ATTRIBUTE_VERSION,
+    APF_ATTRIBUTE_MAX_LEN,
+    APF_ATTRIBUTE_PROGRAM,
+    APF_ATTRIBUTE_PROGRAM_LEN
+};
+
+enum apf_request_type {
+    GET_APF_CAPABILITIES,
+    SET_APF_PROGRAM
 };
 
 /* Initialize/Cleanup */
@@ -163,6 +179,8 @@ wifi_error init_wifi_vendor_hal_func_table(wifi_hal_fn *fn)
     fn->wifi_start_pkt_fate_monitoring = wifi_start_pkt_fate_monitoring;
     fn->wifi_get_tx_pkt_fates = wifi_get_tx_pkt_fates;
     fn->wifi_get_rx_pkt_fates = wifi_get_rx_pkt_fates;
+    fn->wifi_get_packet_filter_capabilities = wifi_get_packet_filter_capabilities;
+    fn->wifi_set_packet_filter = wifi_set_packet_filter;
     return WIFI_SUCCESS;
 }
 
@@ -803,6 +821,143 @@ public:
 
 };
 
+class AndroidPktFilterCommand : public WifiCommand {
+    private:
+        const u8* mProgram;
+        u32 mProgramLen;
+        u32* mVersion;
+        u32* mMaxLen;
+        int mReqType;
+    public:
+        AndroidPktFilterCommand(wifi_interface_handle handle,
+                u32* version, u32* max_len)
+            : WifiCommand("AndroidPktFilterCommand", handle, 0),
+                    mVersion(version), mMaxLen(max_len),
+                    mReqType(GET_APF_CAPABILITIES)
+        {
+        }
+
+        AndroidPktFilterCommand(wifi_interface_handle handle,
+                const u8* program, u32 len)
+            : WifiCommand("AndroidPktFilterCommand", handle, 0),
+                    mProgram(program), mProgramLen(len),
+                    mReqType(SET_APF_PROGRAM)
+        {
+        }
+
+    int createRequest(WifiRequest& request) {
+        if (mReqType == SET_APF_PROGRAM) {
+            ALOGI("\n%s: APF set program request\n", __FUNCTION__);
+            return createSetPktFilterRequest(request);
+        } else if (mReqType == GET_APF_CAPABILITIES) {
+            ALOGI("\n%s: APF get capabilities request\n", __FUNCTION__);
+            return createGetPktFilterCapabilitesRequest(request);
+        } else {
+            ALOGE("\n%s Unknown APF request\n", __FUNCTION__);
+            return WIFI_ERROR_NOT_SUPPORTED;
+        }
+        return WIFI_SUCCESS;
+    }
+
+    int createSetPktFilterRequest(WifiRequest& request) {
+        u8 *program = new u8[mProgramLen];
+        int result = request.create(GOOGLE_OUI, APF_SUBCMD_SET_FILTER);
+        if (result < 0) {
+            return result;
+        }
+
+        nlattr *data = request.attr_start(NL80211_ATTR_VENDOR_DATA);
+        result = request.put_u32(APF_ATTRIBUTE_PROGRAM_LEN, mProgramLen);
+        if (result < 0) {
+            return result;
+        }
+        memcpy(program, mProgram, mProgramLen);
+        result = request.put(APF_ATTRIBUTE_PROGRAM, program, mProgramLen);
+        if (result < 0) {
+            return result;
+        }
+        request.attr_end(data);
+        delete program;
+        return result;
+    }
+
+    int createGetPktFilterCapabilitesRequest(WifiRequest& request) {
+        int result = request.create(GOOGLE_OUI, APF_SUBCMD_GET_CAPABILITIES);
+        if (result < 0) {
+            return result;
+        }
+
+        nlattr *data = request.attr_start(NL80211_ATTR_VENDOR_DATA);
+        request.attr_end(data);
+        return result;
+    }
+
+    int start() {
+        WifiRequest request(familyId(), ifaceId());
+        int result = createRequest(request);
+        if (result < 0) {
+            return result;
+        }
+        result = requestResponse(request);
+        if (result < 0) {
+            ALOGI("Request Response failed for APF, result = %d", result);
+            return result;
+        }
+        ALOGI("Done!");
+        return result;
+    }
+
+    int cancel() {
+        return WIFI_SUCCESS;
+    }
+
+    int handleResponse(WifiEvent& reply) {
+        ALOGD("In SetAPFCommand::handleResponse");
+
+        if (reply.get_cmd() != NL80211_CMD_VENDOR) {
+            ALOGD("Ignoring reply with cmd = %d", reply.get_cmd());
+            return NL_SKIP;
+        }
+
+        int id = reply.get_vendor_id();
+        int subcmd = reply.get_vendor_subcmd();
+
+        nlattr *vendor_data = reply.get_attribute(NL80211_ATTR_VENDOR_DATA);
+        int len = reply.get_vendor_data_len();
+
+        ALOGD("Id = %0x, subcmd = %d, len = %d", id, subcmd, len);
+        if (vendor_data == NULL || len == 0) {
+            ALOGE("no vendor data in SetAPFCommand response; ignoring it");
+            return NL_SKIP;
+        }
+        if( mReqType == SET_APF_PROGRAM) {
+            ALOGD("Response recieved for set packet filter command\n");
+        } else if (mReqType == GET_APF_CAPABILITIES) {
+            *mVersion = 0;
+            *mMaxLen = 0;
+            ALOGD("Response recieved for get packet filter capabilities command\n");
+            for (nl_iterator it(vendor_data); it.has_next(); it.next()) {
+                if (it.get_type() == APF_ATTRIBUTE_VERSION) {
+                    *mVersion = it.get_u32();
+                    ALOGI("APF version is %d\n", *mVersion);
+                } else if (it.get_type() == APF_ATTRIBUTE_MAX_LEN) {
+                    *mMaxLen = it.get_u32();
+                    ALOGI("APF max len is %d\n", *mMaxLen);
+                } else {
+                    ALOGE("Ignoring invalid attribute type = %d, size = %d",
+                            it.get_type(), it.get_len());
+                }
+            }
+        }
+        return NL_OK;
+    }
+
+    int handleEvent(WifiEvent& event) {
+        /* No Event to recieve for APF commands */
+        return NL_SKIP;
+    }
+};
+
 class GetFeatureSetCommand : public WifiCommand {
 
 private:
@@ -1062,6 +1217,30 @@ static wifi_error wifi_stop_rssi_monitoring(wifi_request_id id, wifi_interface_h
         return WIFI_SUCCESS;
     }
     return wifi_cancel_cmd(id, iface);
+}
+
+static wifi_error wifi_get_packet_filter_capabilities(wifi_interface_handle handle,
+        u32 *version, u32 *max_len)
+{
+    ALOGD("Getting APF capabilities, halHandle = %p\n", handle);
+    wifi_error Status = WIFI_SUCCESS;
+
+    AndroidPktFilterCommand *cmd = new AndroidPktFilterCommand(handle, version, max_len);
+    Status = (wifi_error)cmd->start();
+    if(Status == WIFI_SUCCESS) {
+        ALOGD("Getting APF capability, version = %d, max_len = %d\n", *version, *max_len);
+    }
+    return Status;
+}
+
+static wifi_error wifi_set_packet_filter(wifi_interface_handle handle,
+        const u8 *program, u32 len)
+{
+    ALOGD("Setting APF program, halHandle = %p\n", handle);
+    wifi_error Status = WIFI_SUCCESS;
+
+    AndroidPktFilterCommand *cmd = new AndroidPktFilterCommand(handle, program, len);
+    return (wifi_error)cmd->start();
 }
 
 /////////////////////////////////////////////////////////////////////////////
