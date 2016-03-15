@@ -753,6 +753,11 @@ int wifi_handle_full_scan_event(
     wifi_scan_result *full_scan_result;
     wifi_gscan_result_t *fixed = &drv_res->fixed;
 
+    if ((ie_len + offsetof(wifi_gscan_full_result_t, ie_data)) > len) {
+        ALOGE("BAD event data, len %d ie_len %d fixed length %d!\n", len,
+            ie_len, offsetof(wifi_gscan_full_result_t, ie_data));
+        return NL_SKIP;
+    }
     full_scan_result = (wifi_scan_result *) malloc((ie_len + offsetof(wifi_scan_result, ie_data)));
     if (!full_scan_result) {
         ALOGE("Full scan results: Can't malloc!\n");
