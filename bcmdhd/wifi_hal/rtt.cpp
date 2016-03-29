@@ -160,19 +160,19 @@ protected:
 };
 
 
-class GetRttAvailableChannelCommand : public WifiCommand
+class GetRttResponderInfoCommand : public WifiCommand
 {
-    wifi_channel_info* mChannelInfo;
+    wifi_rtt_responder* mResponderInfo;
 public:
-    GetRttAvailableChannelCommand(wifi_interface_handle iface, wifi_channel_info *channel)
-        : WifiCommand("GetRttAvailableChannelCommand", iface, 0), mChannelInfo(channel)
+    GetRttResponderInfoCommand(wifi_interface_handle iface, wifi_rtt_responder *responderInfo)
+        : WifiCommand("GetRttResponderInfoCommand", iface, 0), mResponderInfo(responderInfo)
     {
-        memset(mChannelInfo, 0 , sizeof(*mChannelInfo));
+        memset(mResponderInfo, 0 , sizeof(*mResponderInfo));
 
     }
 
     virtual int create() {
-        ALOGD("Creating message to get available channel ; iface = %d", mIfaceInfo->id);
+        ALOGD("Creating message to get responder info ; iface = %d", mIfaceInfo->id);
 
         int ret = mMsg.create(GOOGLE_OUI, RTT_SUBCMD_GETAVAILCHANNEL);
         if (ret < 0) {
@@ -185,7 +185,7 @@ public:
 protected:
     virtual int handleResponse(WifiEvent& reply) {
 
-        ALOGD("In GetRttAvailableChannelCommand::handleResponse");
+        ALOGD("In GetRttResponderInfoCommand::handleResponse");
 
         if (reply.get_cmd() != NL80211_CMD_VENDOR) {
             ALOGD("Ignoring reply with cmd = %d", reply.get_cmd());
@@ -199,9 +199,9 @@ protected:
         int len = reply.get_vendor_data_len();
 
         ALOGD("Id = %0x, subcmd = %d, len = %d, expected len = %d", id, subcmd, len,
-                sizeof(*mChannelInfo));
+                sizeof(*mResponderInfo));
 
-        memcpy(mChannelInfo, data, min(len, (int) sizeof(*mChannelInfo)));
+        memcpy(mResponderInfo, data, min(len, (int) sizeof(*mResponderInfo)));
 
         return NL_OK;
     }
@@ -211,15 +211,15 @@ protected:
 class EnableResponderCommand : public WifiCommand
 {
     wifi_channel_info  mChannelInfo;
-    wifi_channel_info* mChannelUsed;
+    wifi_rtt_responder* mResponderInfo;
     unsigned m_max_duration_sec;
 public:
     EnableResponderCommand(wifi_interface_handle iface, int id, wifi_channel_info channel_hint,
-            unsigned max_duration_seconds, wifi_channel_info *channel_used)
+            unsigned max_duration_seconds, wifi_rtt_responder *responderInfo)
             : WifiCommand("EnableResponderCommand", iface, 0), mChannelInfo(channel_hint),
-            m_max_duration_sec(max_duration_seconds), mChannelUsed(channel_used)
+            m_max_duration_sec(max_duration_seconds), mResponderInfo(responderInfo)
     {
-        memset(mChannelUsed, 0 , sizeof(*mChannelUsed));
+        memset(mResponderInfo, 0 , sizeof(*mResponderInfo));
 
     }
 
@@ -251,9 +251,9 @@ protected:
         int len = reply.get_vendor_data_len();
 
         ALOGD("Id = %0x, subcmd = %d, len = %d, expected len = %d", id, subcmd, len,
-                sizeof(*mChannelUsed));
+                sizeof(*mResponderInfo));
 
-        memcpy(mChannelUsed, data, min(len, (int) sizeof(*mChannelUsed)));
+        memcpy(mResponderInfo, data, min(len, (int) sizeof(*mResponderInfo)));
 
         return NL_OK;
     }
@@ -641,10 +641,11 @@ wifi_error wifi_get_rtt_capabilities(wifi_interface_handle iface,
     return (wifi_error) command.requestResponse();
 }
 
-/* API to get the channel */
-wifi_error wifi_rtt_get_available_channel(wifi_interface_handle iface, wifi_channel_info* channel)
+/* API to get the responder information */
+wifi_error wifi_rtt_get_responder_info(wifi_interface_handle iface,
+        wifi_rtt_responder* responderInfo)
 {
-    GetRttAvailableChannelCommand command(iface, channel);
+    GetRttResponderInfoCommand command(iface, responderInfo);
     return (wifi_error) command.requestResponse();
 
 }
@@ -653,13 +654,13 @@ wifi_error wifi_rtt_get_available_channel(wifi_interface_handle iface, wifi_chan
  * Enable RTT responder mode.
  * channel_hint - hint of the channel information where RTT responder should be enabled on.
  * max_duration_seconds - timeout of responder mode.
- * channel_used - channel used for RTT responder, NULL if responder is not enabled.
+ * wifi_rtt_responder - information for RTT responder e.g. channel used and preamble supported.
  */
 wifi_error wifi_enable_responder(wifi_request_id id, wifi_interface_handle iface,
                                 wifi_channel_info channel_hint, unsigned max_duration_seconds,
-                                wifi_channel_info* channel_used )
+                                wifi_rtt_responder* responderInfo)
 {
-    EnableResponderCommand command(iface, id, channel_hint, max_duration_seconds, channel_used);
+    EnableResponderCommand command(iface, id, channel_hint, max_duration_seconds, responderInfo);
     return (wifi_error) command.requestResponse();
 }
 
