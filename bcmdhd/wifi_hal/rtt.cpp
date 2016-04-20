@@ -201,8 +201,7 @@ protected:
         ALOGD("Id = %0x, subcmd = %d, len = %d, expected len = %d", id, subcmd, len,
                 sizeof(*mResponderInfo));
 
-        // TODO: revert after kernel CL is merged.
-        memcpy(&mResponderInfo->channel, data, min(len, (int) sizeof(mResponderInfo->channel)));
+        memcpy(mResponderInfo, data, min(len, (int) sizeof(*mResponderInfo)));
 
         return NL_OK;
     }
@@ -254,8 +253,7 @@ protected:
         ALOGD("Id = %0x, subcmd = %d, len = %d, expected len = %d", id, subcmd, len,
                 sizeof(*mResponderInfo));
 
-        // TODO: revert after kernel CL is merged.
-        memcpy(&mResponderInfo->channel, data, min(len, (int) sizeof(mResponderInfo->channel)));
+        memcpy(mResponderInfo, data, min(len, (int) sizeof(*mResponderInfo)));
 
         return NL_OK;
     }
