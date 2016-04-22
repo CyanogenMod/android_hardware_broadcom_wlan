@@ -219,8 +219,7 @@ public:
             : WifiCommand("EnableResponderCommand", iface, 0), mChannelInfo(channel_hint),
             m_max_duration_sec(max_duration_seconds), mResponderInfo(responderInfo)
     {
-        memset(mResponderInfo, 0 , sizeof(*mResponderInfo));
-
+        memset(mResponderInfo, 0, sizeof(*mResponderInfo));
     }
 
     virtual int create() {
@@ -613,10 +612,20 @@ wifi_error wifi_rtt_range_request(wifi_request_id id, wifi_interface_handle ifac
         unsigned num_rtt_config, wifi_rtt_config rtt_config[], wifi_rtt_event_handler handler)
 {
     wifi_handle handle = getWifiHandle(iface);
-
     RttCommand *cmd = new RttCommand(iface, id, num_rtt_config, rtt_config, handler);
-    wifi_register_cmd(handle, id, cmd);
-    return (wifi_error)cmd->start();
+    NULL_CHECK_RETURN(cmd, "memory allocation failure", WIFI_ERROR_OUT_OF_MEMORY);
+    wifi_error result = wifi_register_cmd(handle, id, cmd);
+    if (result != WIFI_SUCCESS) {
+        cmd->releaseRef();
+        return result;
+    }
+    result = (wifi_error)cmd->start();
+    if (result != WIFI_SUCCESS) {
+        wifi_unregister_cmd(handle, id);
+        cmd->releaseRef();
+        return result;
+    }
+    return result;
 }
 
 /* API to cancel RTT measurements */
@@ -625,12 +634,10 @@ wifi_error wifi_rtt_range_cancel(wifi_request_id id,  wifi_interface_handle ifac
 {
     wifi_handle handle = getWifiHandle(iface);
     RttCommand *cmd = new RttCommand(iface, id);
-    if (cmd) {
-        cmd->cancel_specific(num_devices, addr);
-        cmd->releaseRef();
-        return WIFI_SUCCESS;
-    }
-    return WIFI_ERROR_INVALID_ARGS;
+    NULL_CHECK_RETURN(cmd, "memory allocation failure", WIFI_ERROR_OUT_OF_MEMORY);
+    cmd->cancel_specific(num_devices, addr);
+    cmd->releaseRef();
+    return WIFI_SUCCESS;
 }
 
 /* API to get RTT capability */
