@@ -245,5 +245,13 @@ wifi_error wifi_cancel_cmd(wifi_request_id id, wifi_interface_handle iface);
 #define min(x, y)       ((x) < (y) ? (x) : (y))
 #define max(x, y)       ((x) > (y) ? (x) : (y))
 
+#define NULL_CHECK_RETURN(ptr, str, ret) \
+    do { \
+        if (!(ptr)) { \
+            ALOGE("%s(): null pointer - #ptr (%s)\n", __FUNCTION__, str); \
+            return ret; \
+        } \
+    } while (0)
+
 #endif
 

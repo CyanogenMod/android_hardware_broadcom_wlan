@@ -685,10 +685,17 @@ wifi_error wifi_start_gscan(
     ALOGV("Starting GScan, halHandle = %p", handle);
 
     ScanCommand *cmd = new ScanCommand(iface, id, &params, handler);
-    wifi_register_cmd(handle, id, cmd);
-    wifi_error result = (wifi_error)cmd->start();
+    NULL_CHECK_RETURN(cmd, "memory allocation failure", WIFI_ERROR_OUT_OF_MEMORY);
+    wifi_error result = wifi_register_cmd(handle, id, cmd);
+    if (result != WIFI_SUCCESS) {
+        cmd->releaseRef();
+        return result;
+    }
+    result = (wifi_error)cmd->start();
     if (result != WIFI_SUCCESS) {
         wifi_unregister_cmd(handle, id);
+        cmd->releaseRef();
+        return result;
     }
     return result;
 }
@@ -705,6 +712,7 @@ wifi_error wifi_stop_gscan(wifi_request_id id, wifi_interface_handle iface)
         memset(&handler, 0, sizeof(handler));
 
         ScanCommand *cmd = new ScanCommand(iface, id, &dummy_params, handler);
+        NULL_CHECK_RETURN(cmd, "memory allocation failure", WIFI_ERROR_OUT_OF_MEMORY);
         cmd->cancel();
         cmd->releaseRef();
         return WIFI_SUCCESS;
@@ -712,7 +720,6 @@ wifi_error wifi_stop_gscan(wifi_request_id id, wifi_interface_handle iface)
 
     return wifi_cancel_cmd(id, iface);
 }
-
 
 wifi_error wifi_enable_full_scan_results(
         wifi_request_id id,
@@ -725,11 +732,17 @@ wifi_error wifi_enable_full_scan_results(
     ALOGV("Enabling full scan results, halHandle = %p", handle);
 
     FullScanResultsCommand *cmd = new FullScanResultsCommand(iface, id, &params_dummy, handler);
-    wifi_register_cmd(handle, id, cmd);
-
-    wifi_error result = (wifi_error)cmd->start();
+    NULL_CHECK_RETURN(cmd, "memory allocation failure", WIFI_ERROR_OUT_OF_MEMORY);
+    wifi_error result = wifi_register_cmd(handle, id, cmd);
+    if (result != WIFI_SUCCESS) {
+        cmd->releaseRef();
+        return result;
+    }
+    result = (wifi_error)cmd->start();
     if (result != WIFI_SUCCESS) {
         wifi_unregister_cmd(handle, id);
+        cmd->releaseRef();
+        return result;
     }
     return result;
 }
@@ -790,6 +803,7 @@ wifi_error wifi_disable_full_scan_results(wifi_request_id id, wifi_interface_han
 
         memset(&handler, 0, sizeof(handler));
         FullScanResultsCommand *cmd = new FullScanResultsCommand(iface, 0, &params_dummy, handler);
+        NULL_CHECK_RETURN(cmd, "memory allocation failure", WIFI_ERROR_OUT_OF_MEMORY);
         cmd->cancel();
         cmd->releaseRef();
         return WIFI_SUCCESS;
@@ -964,8 +978,9 @@ wifi_error wifi_get_cached_gscan_results(wifi_interface_handle iface, byte flush
     ALOGV("Getting cached scan results, iface handle = %p, num = %d", iface, *num);
 
     GetScanResultsCommand *cmd = new GetScanResultsCommand(iface, flush, results, max, num);
-    wifi_error err = (wifi_error) cmd->execute();
-    delete cmd;
+    NULL_CHECK_RETURN(cmd, "memory allocation failure", WIFI_ERROR_OUT_OF_MEMORY);
+    wifi_error err = (wifi_error)cmd->execute();
+    cmd->releaseRef();
     return err;
 }
 
@@ -1343,10 +1358,17 @@ wifi_error wifi_set_bssid_hotlist(wifi_request_id id, wifi_interface_handle ifac
     wifi_handle handle = getWifiHandle(iface);
 
     BssidHotlistCommand *cmd = new BssidHotlistCommand(iface, id, params, handler);
-    wifi_register_cmd(handle, id, cmd);
-    wifi_error result = (wifi_error)cmd->start();
+    NULL_CHECK_RETURN(cmd, "memory allocation failure", WIFI_ERROR_OUT_OF_MEMORY);
+    wifi_error result = wifi_register_cmd(handle, id, cmd);
+    if (result != WIFI_SUCCESS) {
+        cmd->releaseRef();
+        return result;
+    }
+    result = (wifi_error)cmd->start();
     if (result != WIFI_SUCCESS) {
         wifi_unregister_cmd(handle, id);
+        cmd->releaseRef();
+        return result;
     }
     return result;
 }
@@ -1558,10 +1580,17 @@ wifi_error wifi_set_significant_change_handler(wifi_request_id id, wifi_interfac
 
     SignificantWifiChangeCommand *cmd = new SignificantWifiChangeCommand(
             iface, id, params, handler);
-    wifi_register_cmd(handle, id, cmd);
-    wifi_error result = (wifi_error)cmd->start();
+    NULL_CHECK_RETURN(cmd, "memory allocation failure", WIFI_ERROR_OUT_OF_MEMORY);
+    wifi_error result = wifi_register_cmd(handle, id, cmd);
+    if (result != WIFI_SUCCESS) {
+        cmd->releaseRef();
+        return result;
+    }
+    result = (wifi_error)cmd->start();
     if (result != WIFI_SUCCESS) {
         wifi_unregister_cmd(handle, id);
+        cmd->releaseRef();
+        return result;
     }
     return result;
 }
@@ -1579,6 +1608,7 @@ wifi_error wifi_reset_epno_list(wifi_request_id id, wifi_interface_handle iface)
 
         memset(&handler, 0, sizeof(handler));
         ePNOCommand *cmd = new ePNOCommand(iface, id, NULL, handler);
+        NULL_CHECK_RETURN(cmd, "memory allocation failure", WIFI_ERROR_OUT_OF_MEMORY);
         cmd->cancel();
         cmd->releaseRef();
         return WIFI_SUCCESS;
@@ -1589,15 +1619,22 @@ wifi_error wifi_reset_epno_list(wifi_request_id id, wifi_interface_handle iface)
 wifi_error wifi_set_epno_list(wifi_request_id id, wifi_interface_handle iface,
         const wifi_epno_params *params, wifi_epno_handler handler)
 {
-     wifi_handle handle = getWifiHandle(iface);
+    wifi_handle handle = getWifiHandle(iface);
 
-     ePNOCommand *cmd = new ePNOCommand(iface, id, params, handler);
-     wifi_register_cmd(handle, id, cmd);
-     wifi_error result = (wifi_error)cmd->start();
-     if (result != WIFI_SUCCESS) {
-         wifi_unregister_cmd(handle, id);
-     }
-     return result;
+    ePNOCommand *cmd = new ePNOCommand(iface, id, params, handler);
+    NULL_CHECK_RETURN(cmd, "memory allocation failure", WIFI_ERROR_OUT_OF_MEMORY);
+    wifi_error result = wifi_register_cmd(handle, id, cmd);
+    if (result != WIFI_SUCCESS) {
+        cmd->releaseRef();
+        return result;
+    }
+    result = (wifi_error)cmd->start();
+    if (result != WIFI_SUCCESS) {
+        wifi_unregister_cmd(handle, id);
+        cmd->releaseRef();
+        return result;
+    }
+    return result;
 }
 
 class BssidBlacklistCommand : public WifiCommand
@@ -1670,6 +1707,7 @@ wifi_error wifi_set_bssid_blacklist(wifi_request_id id, wifi_interface_handle if
     wifi_handle handle = getWifiHandle(iface);
 
     BssidBlacklistCommand *cmd = new BssidBlacklistCommand(iface, id, &params);
+    NULL_CHECK_RETURN(cmd, "memory allocation failure", WIFI_ERROR_OUT_OF_MEMORY);
     wifi_error result = (wifi_error)cmd->start();
     //release the reference of command as well
     cmd->releaseRef();
@@ -1836,10 +1874,17 @@ wifi_error wifi_set_passpoint_list(wifi_request_id id, wifi_interface_handle ifa
     wifi_handle handle = getWifiHandle(iface);
 
     AnqpoConfigureCommand *cmd = new AnqpoConfigureCommand(id, iface, num, networks, handler);
-    wifi_register_cmd(handle, id, cmd);
-    wifi_error result = (wifi_error)cmd->start();
+    NULL_CHECK_RETURN(cmd, "memory allocation failure", WIFI_ERROR_OUT_OF_MEMORY);
+    wifi_error result = wifi_register_cmd(handle, id, cmd);
+    if (result != WIFI_SUCCESS) {
+        cmd->releaseRef();
+        return result;
+    }
+    result = (wifi_error)cmd->start();
     if (result != WIFI_SUCCESS) {
         wifi_unregister_cmd(handle, id);
+        cmd->releaseRef();
+        return result;
     }
     return result;
 }

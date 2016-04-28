@@ -862,6 +862,7 @@ class AndroidPktFilterCommand : public WifiCommand {
 
     int createSetPktFilterRequest(WifiRequest& request) {
         u8 *program = new u8[mProgramLen];
+        NULL_CHECK_RETURN(program, "memory allocation failure", WIFI_ERROR_OUT_OF_MEMORY);
         int result = request.create(GOOGLE_OUI, APF_SUBCMD_SET_FILTER);
         if (result < 0) {
             return result;
@@ -1222,15 +1223,20 @@ static wifi_error wifi_start_rssi_monitoring(wifi_request_id id, wifi_interface_
     ALOGD("Start RSSI monitor %d", id);
     wifi_handle handle = getWifiHandle(iface);
     SetRSSIMonitorCommand *cmd = new SetRSSIMonitorCommand(id, iface, max_rssi, min_rssi, eh);
-    wifi_register_cmd(handle, id, cmd);
-
-    wifi_error result = (wifi_error)cmd->start();
+    NULL_CHECK_RETURN(cmd, "memory allocation failure", WIFI_ERROR_OUT_OF_MEMORY);
+    wifi_error result = wifi_register_cmd(handle, id, cmd);
+    if (result != WIFI_SUCCESS) {
+        cmd->releaseRef();
+        return result;
+    }
+    result = (wifi_error)cmd->start();
     if (result != WIFI_SUCCESS) {
         wifi_unregister_cmd(handle, id);
+        cmd->releaseRef();
+        return result;
     }
     return result;
 }
-
 
 static wifi_error wifi_stop_rssi_monitoring(wifi_request_id id, wifi_interface_handle iface)
 {
@@ -1243,6 +1249,7 @@ static wifi_error wifi_stop_rssi_monitoring(wifi_request_id id, wifi_interface_h
         memset(&handler, 0, sizeof(handler));
         SetRSSIMonitorCommand *cmd = new SetRSSIMonitorCommand(id, iface,
                                                     max_rssi, min_rssi, handler);
+        NULL_CHECK_RETURN(cmd, "memory allocation failure", WIFI_ERROR_OUT_OF_MEMORY);
         cmd->cancel();
         cmd->releaseRef();
         return WIFI_SUCCESS;
@@ -1254,24 +1261,25 @@ static wifi_error wifi_get_packet_filter_capabilities(wifi_interface_handle hand
         u32 *version, u32 *max_len)
 {
     ALOGD("Getting APF capabilities, halHandle = %p\n", handle);
-    wifi_error Status = WIFI_SUCCESS;
-
     AndroidPktFilterCommand *cmd = new AndroidPktFilterCommand(handle, version, max_len);
-    Status = (wifi_error)cmd->start();
-    if(Status == WIFI_SUCCESS) {
+    NULL_CHECK_RETURN(cmd, "memory allocation failure", WIFI_ERROR_OUT_OF_MEMORY);
+    wifi_error result = (wifi_error)cmd->start();
+    if (result == WIFI_SUCCESS) {
         ALOGD("Getting APF capability, version = %d, max_len = %d\n", *version, *max_len);
     }
-    return Status;
+    cmd->releaseRef();
+    return result;
 }
 
 static wifi_error wifi_set_packet_filter(wifi_interface_handle handle,
         const u8 *program, u32 len)
 {
     ALOGD("Setting APF program, halHandle = %p\n", handle);
-    wifi_error Status = WIFI_SUCCESS;
-
     AndroidPktFilterCommand *cmd = new AndroidPktFilterCommand(handle, program, len);
-    return (wifi_error)cmd->start();
+    NULL_CHECK_RETURN(cmd, "memory allocation failure", WIFI_ERROR_OUT_OF_MEMORY);
+    wifi_error result = (wifi_error)cmd->start();
+    cmd->releaseRef();
+    return result;
 }
 
 static wifi_error wifi_configure_nd_offload(wifi_interface_handle handle, u8 enable)
