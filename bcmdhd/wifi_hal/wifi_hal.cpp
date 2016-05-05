@@ -879,7 +879,7 @@ class AndroidPktFilterCommand : public WifiCommand {
             return result;
         }
         request.attr_end(data);
-        delete program;
+        delete[] program;
         return result;
     }
 
